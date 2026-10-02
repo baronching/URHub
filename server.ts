@@ -675,7 +675,6 @@ Respond ONLY with valid JSON.`;
 
 async function startServer() {
   const isDev = process.env.NODE_ENV !== 'production';
-  const disableHmr = process.env.DISABLE_HMR === 'true';
 
   const httpServer = http.createServer(app);
 
@@ -684,7 +683,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: disableHmr ? false : { server: httpServer },
+        hmr: false,
       },
       appType: 'spa',
     });

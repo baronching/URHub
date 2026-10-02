@@ -10,6 +10,31 @@
     <meta property="og:description" content="An AI-Powered Web-Based Research Archives for Universidad de Manila Using Machine Learning (URELIA Office)." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Suppress Vite HMR WebSocket connection errors in iframe / proxy environments
+      window.addEventListener('unhandledrejection', function (e) {
+        var reason = e.reason ? (e.reason.message || String(e.reason)) : '';
+        if (
+          reason.indexOf('WebSocket') !== -1 ||
+          reason.indexOf('failed to connect to websocket') !== -1 ||
+          reason.indexOf('closed without opened') !== -1
+        ) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      });
+      window.addEventListener('error', function (e) {
+        var msg = e.message || '';
+        if (
+          msg.indexOf('WebSocket') !== -1 ||
+          msg.indexOf('failed to connect to websocket') !== -1 ||
+          msg.indexOf('closed without opened') !== -1
+        ) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
