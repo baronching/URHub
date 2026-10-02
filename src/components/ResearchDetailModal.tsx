@@ -101,9 +101,9 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
           bulletPoints: [
             `Authored by ${research.authors.join(', ')} (${research.year}) under ${research.department}.`,
             `Focuses on ${research.keywords.slice(0, 3).join(', ')} with application to institutional challenges.`,
-            `Documented methodology with peer review score ${research.peerReviewScore ?? 92}/100 and ${research.citationsCount ?? 14} citations.`
+            `Documented academic methodology with ${research.viewsCount ?? 1} views and ${research.downloadsCount ?? 0} downloads.`
           ],
-          sdgAlignment: `Supports Sustainable Development Goals (SDG ${research.sdgGoals.join(', ')}) targeting positive societal and institutional impact.`,
+          sdgAlignment: `Supports Sustainable Development Goals (Quality Education & Innovation) targeting positive societal and institutional impact.`,
           methodologySummary: `Rigorous academic research conducted under the ${research.department} curriculum with statistical and analytical verification.`,
           practicalApplications: `Applicable to local governance, education management, and Manila urban technology ecosystems.`
         });

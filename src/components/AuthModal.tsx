@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UDMCollege, UDM_COLLEGES } from '../types';
+import { INITIAL_USERS } from '../data/mockDatabase';
 import {
   registerUserWithSupabase,
   loginUserWithSupabase
@@ -69,7 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
     setIsLoading(false);
 
     // Direct lookup from seed database
-    const found = INITIAL_USERS.find(u => u.email.toLowerCase() === demoEmail.toLowerCase());
+    const found = INITIAL_USERS.find((u: User) => u.email.toLowerCase() === demoEmail.toLowerCase());
     const targetUser: User = found || {
       userID: demoRole === 'super_admin' ? 'USR-UDM-004' : 'USR-UDM-003',
       name: demoRole === 'super_admin' ? 'Engr. System Admin' : 'Dr. Alejandro Reyes',
@@ -229,7 +230,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 <button
                   type="button"
                   onClick={() => handleQuickDemoLogin('areyes.urelia@udm.edu.ph', 'admin')}
-                  className="p-2.5 rounded-lg bg-white border border-[#c9a84c]/50 text-[#1a4731] hover:bg-[#c9a84c]/10 text-center font-bold shadow-xs transition-colors"
+                  className="p-2.5 rounded-lg bg-white border border-[#c9a84c]/50 text-[#1a4731] hover:bg-[#c9a84c]/10 text-center font-bold shadow-xs transition-all cursor-pointer active:scale-95 select-none relative z-10"
                 >
                   Research Admin
                 </button>
@@ -237,7 +238,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 <button
                   type="button"
                   onClick={() => handleQuickDemoLogin('sysadmin@udm.edu.ph', 'super_admin')}
-                  className="p-2.5 rounded-lg bg-[#1a4731] text-white hover:bg-[#123323] text-center font-bold shadow-xs transition-colors"
+                  className="p-2.5 rounded-lg bg-[#1a4731] text-white hover:bg-[#123323] text-center font-bold shadow-xs transition-all cursor-pointer active:scale-95 select-none relative z-10"
                 >
                   Super Admin
                 </button>
