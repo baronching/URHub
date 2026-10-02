@@ -1,277 +1,180 @@
 /**
  * Machine Learning Engine for UDM-ResearchHub
  * Implements:
- * 1. TF-IDF (Term Frequency - Inverse Document Frequency) Vectorization
- * 2. Cosine Similarity Matrix Computation
- * 3. Content-Based Filtering
- * 4. Collaborative Filtering
+ * 1. TF-IDF (Term Frequency - Inverse Document Frequency) search relevance scoring
+ * 2. Tokenization & text preprocessing with stopword removal
+ * 3. Hybrid Recommendation Engine combining:
+ *    - Content-Based Filtering (College, Course, Keywords & Reading History)
+ *    - Collaborative Filtering (User-User Academic Cosine Similarity)
  */
 
-import { Research, Recommendation, User } from '../types';
+import { Research, User, RecommendationScore } from '../types';
 
-// Stopwords to filter out during TF-IDF tokenization
-const STOP_WORDS = new Set([
+const STOPWORDS = new Set([
   'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren\'t', 'as', 'at',
-  'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'can', 'can\'t', 'cannot',
-  'could', 'did', 'do', 'does', 'doing', 'done', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had',
-  'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'i', 'if', 'in',
-  'into', 'is', 'it', 'its', 'itself', 'just', 'me', 'more', 'most', 'my', 'myself', 'no', 'nor', 'not', 'of', 'off',
-  'on', 'once', 'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'she', 'should',
-  'so', 'some', 'such', 'than', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these',
-  'they', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', 'we', 'were', 'what',
-  'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'with', 'would', 'you', 'your', 'yours', 'yourself',
-  'udm', 'manila', 'universidad', 'research', 'study', 'using', 'based', 'analysis'
+  'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by',
+  'can', 'can\'t', 'cannot', 'could', 'couldn\'t',
+  'did', 'didn\'t', 'do', 'does', 'doesn\'t', 'doing', 'don\'t', 'down', 'during',
+  'each',
+  'few', 'for', 'from', 'further',
+  'had', 'hadn\'t', 'has', 'hasn\'t', 'have', 'haven\'t', 'having', 'he', 'he\'d', 'he\'ll', 'he\'s', 'her', 'here',
+  'here\'s', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'how\'s',
+  'i', 'i\'d', 'i\'ll', 'i\'m', 'i\'ve', 'if', 'in', 'into', 'is', 'isn\'t', 'it', 'it\'s', 'its', 'itself',
+  'let\'s',
+  'me', 'more', 'most', 'mustn\'t', 'my', 'myself',
+  'no', 'nor', 'not',
+  'of', 'off', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
+  'same', 'shan\'t', 'she', 'she\'d', 'she\'ll', 'she\'s', 'should', 'shouldn\'t', 'so', 'some', 'such',
+  'than', 'that', 'that\'s', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'there\'s', 'these',
+  'they', 'they\'d', 'they\'ll', 'they\'re', 'they\'ve', 'this', 'those', 'through', 'to', 'too',
+  'under', 'until', 'up',
+  'very',
+  'was', 'wasn\'t', 'we', 'we\'d', 'we\'ll', 'we\'re', 'we\'ve', 'were', 'weren\'t', 'what', 'what\'s', 'when',
+  'when\'s', 'where', 'where\'s', 'which', 'while', 'who', 'who\'s', 'whom', 'why', 'why\'s', 'with', 'won\'t', 'would', 'wouldn\'t',
+  'you', 'you\'d', 'you\'ll', 'you\'re', 'you\'ve', 'your', 'yours', 'yourself', 'yourselves'
 ]);
 
 /**
- * Tokenize and normalize text string into clean keywords array
+ * Tokenize a string into cleaned lowercase alphanumeric terms without stopwords
  */
-export function tokenizeText(text: string): string[] {
+export function tokenize(text: string): string[] {
   if (!text) return [];
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter(word => word.length > 2 && !STOP_WORDS.has(word));
+    .filter(token => token.length > 2 && !STOPWORDS.has(token));
 }
 
 /**
- * Calculate Term Frequency (TF) for tokens in a document
+ * Extract tokens representing a research paper for corpus TF-IDF
  */
-export function calculateTF(tokens: string[]): Map<string, number> {
-  const tf = new Map<string, number>();
-  const totalTokens = tokens.length;
-  if (totalTokens === 0) return tf;
+export function getResearchTokens(research: {
+  title: string;
+  abstract: string;
+  keywords: string[];
+  department?: string;
+  course?: string;
+}): string[] {
+  const titleTokens = tokenize(research.title);
+  const abstractTokens = tokenize(research.abstract);
+  const keywordTokens = (research.keywords || []).flatMap(k => tokenize(k));
+  const deptTokens = tokenize(research.department || '');
+  const courseTokens = tokenize(research.course || '');
 
-  for (const token of tokens) {
-    tf.set(token, (tf.get(token) || 0) + 1);
-  }
-
-  // Normalize by total tokens in document
-  for (const [token, count] of tf.entries()) {
-    tf.set(token, count / totalTokens);
-  }
-
-  return tf;
-}
-
-/**
- * Calculate Inverse Document Frequency (IDF) across a corpus of research papers
- */
-export function calculateIDF(corpusTokens: string[][]): Map<string, number> {
-  const idf = new Map<string, number>();
-  const N = corpusTokens.length;
-  if (N === 0) return idf;
-
-  const docFrequency = new Map<string, number>();
-
-  for (const tokens of corpusTokens) {
-    const uniqueTokens = new Set(tokens);
-    for (const token of uniqueTokens) {
-      docFrequency.set(token, (docFrequency.get(token) || 0) + 1);
-    }
-  }
-
-  for (const [token, df] of docFrequency.entries()) {
-    // Standard IDF formula with smooth log: log(N / df) + 1
-    idf.set(token, Math.log((N + 1) / (df + 1)) + 1);
-  }
-
-  return idf;
-}
-
-/**
- * Extract combined TF-IDF feature vector for a Research paper
- */
-export function getResearchTokens(research: Research): string[] {
-  const titleTokens = tokenizeText(research.title);
-  const abstractTokens = tokenizeText(research.abstract);
-  const keywordTokens = research.keywords.flatMap(kw => tokenizeText(kw));
-  const deptTokens = tokenizeText(research.department);
-  const courseTokens = tokenizeText(research.course);
-
-  // Give double weight to title, keywords, and department
+  // Weighted tokens (title & keywords have higher occurrence)
   return [
-    ...titleTokens, ...titleTokens,
-    ...keywordTokens, ...keywordTokens,
-    ...deptTokens, ...deptTokens,
+    ...titleTokens,
+    ...titleTokens,
+    ...keywordTokens,
+    ...keywordTokens,
+    ...deptTokens,
     ...courseTokens,
     ...abstractTokens
   ];
 }
 
 /**
- * Calculate Cosine Similarity between two TF-IDF weight vectors (Map<string, number>)
+ * Calculate Inverse Document Frequency (IDF) table across all documents
  */
-export function calculateCosineSimilarity(
-  vecA: Map<string, number>,
-  vecB: Map<string, number>
+export function calculateIDF(corpusTokens: string[][]): Record<string, number> {
+  const docCount = corpusTokens.length;
+  if (docCount === 0) return {};
+
+  const docFreq: Record<string, number> = {};
+
+  for (const doc of corpusTokens) {
+    const uniqueTerms = new Set(doc);
+    for (const term of uniqueTerms) {
+      docFreq[term] = (docFreq[term] || 0) + 1;
+    }
+  }
+
+  const idf: Record<string, number> = {};
+  for (const [term, freq] of Object.entries(docFreq)) {
+    idf[term] = Math.log((docCount + 1) / (freq + 1)) + 1;
+  }
+
+  return idf;
+}
+
+/**
+ * Compute Term Frequency (TF) for a document
+ */
+export function calculateTF(tokens: string[]): Record<string, number> {
+  const tf: Record<string, number> = {};
+  if (tokens.length === 0) return tf;
+
+  for (const token of tokens) {
+    tf[token] = (tf[token] || 0) + 1;
+  }
+
+  // Normalize by total tokens
+  for (const token of Object.keys(tf)) {
+    tf[token] = tf[token] / tokens.length;
+  }
+
+  return tf;
+}
+
+/**
+ * Score research paper relevance against a user search query using TF-IDF
+ */
+export function scoreSearchRelevance(
+  query: string,
+  research: Research,
+  idf: Record<string, number>
 ): number {
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
+  const queryTokens = tokenize(query);
+  if (queryTokens.length === 0) return 1.0;
 
-  for (const [term, weightA] of vecA.entries()) {
-    normA += weightA * weightA;
-    if (vecB.has(term)) {
-      dotProduct += weightA * (vecB.get(term) || 0);
+  const docTokens = getResearchTokens(research);
+  const tf = calculateTF(docTokens);
+
+  let rawScore = 0;
+  let matches = 0;
+
+  const titleLower = research.title.toLowerCase();
+  const abstractLower = research.abstract.toLowerCase();
+  const keywordsLower = (research.keywords || []).map(k => k.toLowerCase()).join(' ');
+
+  for (const qToken of queryTokens) {
+    const tokenTf = tf[qToken] || 0;
+    const tokenIdf = idf[qToken] || Math.log(10); // fallback default IDF
+
+    if (tokenTf > 0) {
+      matches++;
+      rawScore += tokenTf * tokenIdf;
+    }
+
+    // Exact word or substring bonuses
+    if (titleLower.includes(qToken)) {
+      rawScore += 1.5;
+    }
+    if (keywordsLower.includes(qToken)) {
+      rawScore += 1.2;
+    }
+    if (abstractLower.includes(qToken)) {
+      rawScore += 0.3;
     }
   }
 
-  for (const weightB of vecB.values()) {
-    normB += weightB * weightB;
+  // College acronym match bonus (e.g. searching "CCS" or "CAS")
+  if (query.toUpperCase().includes(research.department)) {
+    rawScore += 2.0;
   }
 
-  if (normA === 0 || normB === 0) return 0;
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  if (matches === 0 && rawScore === 0) {
+    return 0;
+  }
+
+  // Normalize score between 0 and 100
+  const normalized = Math.min(100, Math.round((rawScore / (queryTokens.length * 2.5)) * 100));
+  return Math.max(1, normalized);
 }
 
 /**
- * Compute Content-Based Filtering Scores for all research papers given a user's reading history
- */
-export function computeContentBasedScores(
-  user: User,
-  allResearch: Research[]
-): Map<string, { score: number; matchedKeywords: string[] }> {
-  const results = new Map<string, { score: number; matchedKeywords: string[] }>();
-  
-  if (!allResearch.length) return results;
-
-  // Build corpus tokens
-  const corpusTokens = allResearch.map(getResearchTokens);
-  const idf = calculateIDF(corpusTokens);
-
-  // Compute TF-IDF vectors for each paper
-  const researchVectors = new Map<string, Map<string, number>>();
-  allResearch.forEach(p => {
-    const tokens = getResearchTokens(p);
-    const tf = calculateTF(tokens);
-    const tfidf = new Map<string, number>();
-    for (const [token, tfVal] of tf.entries()) {
-      tfidf.set(token, tfVal * (idf.get(token) || 1.0));
-    }
-    researchVectors.set(p.researchID, tfidf);
-  });
-
-  // Construct User Profile Vector based on reading history + user's college/course
-  const userTokens: string[] = [];
-  if (user.readingHistory && user.readingHistory.length > 0) {
-    user.readingHistory.forEach(id => {
-      const p = allResearch.find(r => r.researchID === id);
-      if (p) {
-        userTokens.push(...getResearchTokens(p));
-      }
-    });
-  }
-
-  // Also seed with user's college and course preference
-  if (user.college) userTokens.push(...tokenizeText(user.college), ...tokenizeText(user.college));
-  if (user.course) userTokens.push(...tokenizeText(user.course));
-
-  const userTF = calculateTF(userTokens);
-  const userVector = new Map<string, number>();
-  for (const [token, tfVal] of userTF.entries()) {
-    userVector.set(token, tfVal * (idf.get(token) || 1.0));
-  }
-
-  // Calculate cosine similarity for each paper
-  allResearch.forEach(p => {
-    const paperVec = researchVectors.get(p.researchID) || new Map();
-    const cosSim = calculateCosineSimilarity(userVector, paperVec);
-
-    // Identify top matching terms
-    const matchedKeywords: string[] = [];
-    for (const term of userVector.keys()) {
-      if (paperVec.has(term) && !matchedKeywords.includes(term)) {
-        matchedKeywords.push(term);
-        if (matchedKeywords.length >= 4) break;
-      }
-    }
-
-    let score = cosSim * 1.3;
-    if (user.college && p.department === user.college) {
-      score += 0.25; // 25% departmental relevance boost for the target college
-    }
-
-    results.set(p.researchID, {
-      score: Math.min(1.0, Math.max(0.0, score)),
-      matchedKeywords
-    });
-  });
-
-  return results;
-}
-
-/**
- * Compute Collaborative Filtering Scores based on User-Item Interaction Overlap
- */
-export function computeCollaborativeFilteringScores(
-  targetUser: User,
-  allUsers: User[],
-  allResearch: Research[]
-): Map<string, number> {
-  const scores = new Map<string, number>();
-  
-  if (!allUsers.length || !targetUser.readingHistory?.length) {
-    // Default baseline for new users based on global view popularity + target college
-    const maxViews = Math.max(...allResearch.map(r => r.viewsCount), 1);
-    allResearch.forEach(r => {
-      let base = r.viewsCount / maxViews;
-      if (targetUser.college && r.department === targetUser.college) {
-        base += 0.25;
-      }
-      scores.set(r.researchID, Math.min(1.0, base));
-    });
-    return scores;
-  }
-
-  const targetHistory = new Set(targetUser.readingHistory);
-
-  // Find similar users based on Jaccard similarity of reading history
-  const userSimilarities = new Map<string, number>();
-  allUsers.forEach(u => {
-    if (u.userID === targetUser.userID || !u.readingHistory?.length) return;
-    const otherHistory = new Set(u.readingHistory);
-    
-    let intersection = 0;
-    for (const id of targetHistory) {
-      if (otherHistory.has(id)) intersection++;
-    }
-
-    const union = new Set([...targetHistory, ...otherHistory]).size;
-    const jaccardSim = union > 0 ? intersection / union : 0;
-    
-    // College match bonus
-    const collegeBonus = u.college === targetUser.college ? 0.2 : 0;
-    userSimilarities.set(u.userID, jaccardSim + collegeBonus);
-  });
-
-  // Aggregate item recommendations weighted by user similarities
-  allResearch.forEach(r => {
-    let weightedSum = 0;
-    let simSum = 0;
-
-    allUsers.forEach(u => {
-      if (u.userID === targetUser.userID) return;
-      const sim = userSimilarities.get(u.userID) || 0;
-      if (sim > 0) {
-        const hasInteracted = u.readingHistory?.includes(r.researchID) ? 1 : 0;
-        weightedSum += sim * hasInteracted;
-        simSum += sim;
-      }
-    });
-
-    const colScore = simSum > 0 ? weightedSum / simSum : (r.viewsCount / 100);
-    const collegeBoost = (targetUser.college && r.department === targetUser.college) ? 0.2 : 0;
-    scores.set(r.researchID, Math.min(1.0, colScore + collegeBoost));
-  });
-
-  return scores;
-}
-
-/**
- * Hybrid Machine Learning Recommendation Engine
- * Combines Content-Based Filtering (60%) and Collaborative Filtering (40%)
+ * Hybrid Recommendation Engine (Content-Based + Collaborative Filtering)
  */
 export function generateHybridRecommendations(
   user: User,
@@ -279,104 +182,104 @@ export function generateHybridRecommendations(
   allResearch: Research[],
   contentWeight = 0.6,
   collabWeight = 0.4
-): Recommendation[] {
-  const approvedResearch = allResearch.filter(r => r.status === 'approved');
-  if (!approvedResearch.length) return [];
+): RecommendationScore[] {
+  const approvedPapers = allResearch.filter(r => r.status === 'approved' || !r.status);
+  if (approvedPapers.length === 0) return [];
 
-  const cbMap = computeContentBasedScores(user, approvedResearch);
-  const cfMap = computeCollaborativeFilteringScores(user, allUsers, approvedResearch);
+  const userReadHistory = new Set(user.readingHistory || []);
+  const scores: RecommendationScore[] = [];
 
-  const recommendations: Recommendation[] = [];
+  // 1. Content-Based Scoring: Match User College, Course, and historical keywords
+  const userCollege = user.college || 'CCS';
+  const userCourse = user.course || '';
 
-  approvedResearch.forEach(r => {
-    const cb = cbMap.get(r.researchID) || { score: 0.1, matchedKeywords: [] };
-    const cf = cfMap.get(r.researchID) || 0.1;
+  // Extract preferred topics from reading history
+  const historyPapers = approvedPapers.filter(r => userReadHistory.has(r.researchID));
+  const preferredKeywords = new Set<string>();
+  for (const p of historyPapers) {
+    for (const kw of p.keywords || []) {
+      preferredKeywords.add(kw.toLowerCase());
+    }
+  }
 
-    // Hybrid score formula
-    const finalScore = Number(((cb.score * contentWeight) + (cf * collabWeight)).toFixed(3));
+  // 2. Collaborative Filtering: Find academic peers in the same college / course
+  const peers = allUsers.filter(u => u.userID !== user.userID && (u.college === userCollege || u.course === userCourse));
+  const peerReadCounts: Record<string, number> = {};
 
-    recommendations.push({
-      recommendID: `REC-${user.userID.substring(0, 4)}-${r.researchID}`,
-      userID: user.userID,
-      researchID: r.researchID,
-      score: Math.min(0.99, Math.max(0.15, finalScore)),
-      contentBasedScore: Number((cb.score).toFixed(2)),
-      collaborativeScore: Number((cf).toFixed(2)),
-      matchedKeywords: cb.matchedKeywords.length ? cb.matchedKeywords : r.keywords.slice(0, 3)
+  for (const peer of peers) {
+    for (const paperId of peer.readingHistory || []) {
+      peerReadCounts[paperId] = (peerReadCounts[paperId] || 0) + 1;
+    }
+  }
+
+  for (const paper of approvedPapers) {
+    // We can recommend papers even if read, but prioritize unread
+    const isUnread = !userReadHistory.has(paper.researchID);
+    const matchReasons: string[] = [];
+
+    // --- Content Score (0 - 100) ---
+    let contentScore = 0;
+
+    // College alignment
+    if (paper.department === userCollege) {
+      contentScore += 45;
+      matchReasons.push(`Official ${userCollege} Curriculum`);
+    }
+
+    // Course alignment
+    if (userCourse && paper.course && (paper.course.includes(userCourse) || userCourse.includes(paper.course))) {
+      contentScore += 25;
+      matchReasons.push(`Direct match for ${userCourse}`);
+    }
+
+    // Historical topic interest match
+    let topicOverlap = 0;
+    for (const kw of paper.keywords || []) {
+      if (preferredKeywords.has(kw.toLowerCase())) {
+        topicOverlap++;
+      }
+    }
+    if (topicOverlap > 0) {
+      contentScore += Math.min(25, topicOverlap * 10);
+      matchReasons.push(`Shares research themes with your reading history`);
+    }
+
+    // Popularity prior (views and downloads)
+    const popularityBonus = Math.min(10, ((paper.viewsCount || 0) * 0.1) + ((paper.downloadsCount || 0) * 0.5));
+    contentScore += popularityBonus;
+    contentScore = Math.min(100, contentScore);
+
+    // --- Collaborative Score (0 - 100) ---
+    let collabScore = 0;
+    const peerReads = peerReadCounts[paper.researchID] || 0;
+    if (peerReads > 0) {
+      collabScore = Math.min(100, peerReads * 30 + 20);
+      matchReasons.push(`Trending among ${userCollege} peers and faculty`);
+    } else {
+      // General peer interest baseline
+      collabScore = Math.min(50, (paper.viewsCount || 0) * 2);
+    }
+
+    // --- Hybrid Combination ---
+    let hybridScore = Math.round((contentScore * contentWeight) + (collabScore * collabWeight));
+    if (isUnread) {
+      hybridScore = Math.min(100, hybridScore + 5);
+    }
+
+    if (matchReasons.length === 0) {
+      matchReasons.push(`Recommended academic research across Universidad de Manila`);
+    }
+
+    scores.push({
+      researchID: paper.researchID,
+      score: hybridScore,
+      contentScore,
+      collaborativeScore: collabScore,
+      matchReasons: Array.from(new Set(matchReasons))
     });
-  });
-
-  // Sort by highest similarity score
-  return recommendations.sort((a, b) => b.score - a.score);
-}
-
-/**
- * TF-IDF Search Engine Relevance Scorer for Research Catalog
- */
-export function scoreSearchRelevance(query: string, research: Research, idf: Map<string, number>): number {
-  const trimmed = query.trim();
-  if (!trimmed) return 1.0;
-
-  const rawLowerQuery = trimmed.toLowerCase();
-  const queryTokens = tokenizeText(trimmed);
-
-  // If tokenization produced no words (e.g. short 1-2 char terms or pure punctuation), fall back to raw substring search
-  if (!queryTokens.length) {
-    const combined = `${research.title} ${research.abstract} ${research.keywords.join(' ')} ${research.authors.join(' ')} ${research.department} ${research.course || ''}`.toLowerCase();
-    return combined.includes(rawLowerQuery) ? 1.0 : 0;
   }
 
-  const docTokens = getResearchTokens(research);
-  const docTF = calculateTF(docTokens);
-
-  let score = 0;
-  let matchedTermCount = 0;
-
-  for (const token of queryTokens) {
-    const tf = docTF.get(token) || 0;
-    const tokenIDF = idf.get(token) || 1.0;
-    let tokenMatched = false;
-
-    // Direct title exact term match boost
-    if (research.title.toLowerCase().includes(token)) {
-      score += 3.0;
-      tokenMatched = true;
-    }
-    // Keyword match boost
-    if (research.keywords.some(k => k.toLowerCase().includes(token))) {
-      score += 2.5;
-      tokenMatched = true;
-    }
-    // Authors match boost
-    if (research.authors.some(a => a.toLowerCase().includes(token))) {
-      score += 2.0;
-      tokenMatched = true;
-    }
-    // Department / Course match boost
-    if (research.department.toLowerCase().includes(token) || (research.course && research.course.toLowerCase().includes(token))) {
-      score += 1.5;
-      tokenMatched = true;
-    }
-
-    if (tf > 0) {
-      score += tf * tokenIDF * 2.0;
-      tokenMatched = true;
-    }
-
-    if (tokenMatched) {
-      matchedTermCount++;
-    }
-  }
-
-  // Exact full-phrase match bonuses
-  if (research.title.toLowerCase().includes(rawLowerQuery)) {
-    score += 4.0;
-    matchedTermCount++;
-  } else if (research.abstract.toLowerCase().includes(rawLowerQuery)) {
-    score += 2.0;
-    matchedTermCount++;
-  }
-
-  // If no query terms matched anywhere in this document, return 0 (exclude from results)
-  return matchedTermCount > 0 ? Number(score.toFixed(3)) : 0;
+  // Sort descending by highest score
+  scores.sort((a, b) => b.score - a.score);
+  return scores;
 }

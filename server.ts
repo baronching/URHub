@@ -14,8 +14,15 @@ import { Research, Submission, User, SystemSettings, UDMCollege, UDM_COLLEGES } 
 export const app = express();
 const PORT = 3000;
 
-// Initialize Google Gemini SDK
-const ai = new GoogleGenAI();
+// Initialize Google Gemini SDK with server-side API key and telemetry header
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
@@ -471,8 +478,7 @@ app.put('/api/admin/settings', (req: Request, res: Response) => {
 
 // Helper to call Gemini models with fallback and resilient timeout
 async function callGemini(prompt: string, jsonMode: boolean = false): Promise<string | null> {
-  // Use ultra-fast gemini-3.1-flash-lite first for sub-second responses, with gemini-3.8-flash fallback
-  const models = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  const models = ['gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
   for (const model of models) {
     try {
       const generatePromise = ai.models.generateContent({
@@ -481,7 +487,7 @@ async function callGemini(prompt: string, jsonMode: boolean = false): Promise<st
         config: jsonMode ? { responseMimeType: 'application/json' } : undefined
       });
       const timeoutPromise = new Promise<null>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), 25000)
+        setTimeout(() => reject(new Error('Request timed out')), 20000)
       );
       const res = (await Promise.race([generatePromise, timeoutPromise])) as any;
       if (res && res.text && res.text.trim()) return res.text;
