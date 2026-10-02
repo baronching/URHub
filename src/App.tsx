@@ -8,6 +8,7 @@ import { ResearchCard } from './components/ResearchCard';
 import { ResearchDetailModal } from './components/ResearchDetailModal';
 import { SubmissionFormModal } from './components/SubmissionFormModal';
 import { RecommendationSection } from './components/RecommendationSection';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AdminReviewDashboard } from './components/AdminReviewDashboard';
 import { AnalyticsAndReports } from './components/AnalyticsAndReports';
 import { SuperAdminManagement } from './components/SuperAdminManagement';
@@ -501,14 +502,16 @@ export default function App() {
 
         {/* TAB 2: AI RECOMMENDATIONS */}
         {activeTab === 'recommendations' && (
-          <RecommendationSection
-            currentUser={currentUser}
-            recommendations={recommendations}
-            targetCollege={targetRecommendationCollege}
-            onTargetCollegeChange={setTargetRecommendationCollege}
-            onSelectResearch={handleSelectResearch}
-            onOpenAuth={() => setShowAuthModal(true)}
-          />
+          <ErrorBoundary fallbackTitle="Personalized AI Recommendations" onReset={() => setActiveTab('archive')}>
+            <RecommendationSection
+              currentUser={currentUser}
+              recommendations={recommendations}
+              targetCollege={targetRecommendationCollege}
+              onTargetCollegeChange={setTargetRecommendationCollege}
+              onSelectResearch={handleSelectResearch}
+              onOpenAuth={() => setShowAuthModal(true)}
+            />
+          </ErrorBoundary>
         )}
 
         {/* TAB 3: ADMIN REVIEW QUEUE */}

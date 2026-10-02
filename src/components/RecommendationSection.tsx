@@ -90,16 +90,27 @@ export const RecommendationSection: React.FC<RecommendationSectionProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {recommendations.map((rec) => {
-            const paper = rec.paper;
+          {recommendations.map((rec, idx) => {
+            const paper = rec?.paper;
             if (!paper) return null;
 
-            const matchPercent = Math.round(rec.score * 100);
+            const rawScore = rec.score ?? 0;
+            const matchPercent = Math.min(100, Math.max(1, rawScore > 1 ? Math.round(rawScore) : Math.round(rawScore * 100)));
+
+            const rawCb = rec.contentBasedScore ?? (rec as any).contentScore ?? 0;
+            const cbPercent = Math.min(100, Math.max(0, rawCb > 1 ? Math.round(rawCb) : Math.round(rawCb * 100)));
+
+            const rawCf = rec.collaborativeScore ?? 0;
+            const cfPercent = Math.min(100, Math.max(0, rawCf > 1 ? Math.round(rawCf) : Math.round(rawCf * 100)));
+
             const collegeInfo = UDM_COLLEGES.find(c => c.id === paper.department);
+            const matchedTerms = (rec.matchedKeywords && rec.matchedKeywords.length > 0)
+              ? rec.matchedKeywords
+              : (paper.keywords && paper.keywords.length > 0 ? paper.keywords : [paper.department, 'Capstone']);
 
             return (
               <div
-                key={rec.recommendID}
+                key={rec.recommendID || rec.researchID || `rec-${paper.researchID}-${idx}`}
                 onClick={() => onSelectResearch(paper)}
                 className="bg-white rounded-xl p-4 sm:p-5 md:p-6 border border-slate-200 hover:border-[#1a4731]/40 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative"
               >
@@ -112,13 +123,13 @@ export const RecommendationSection: React.FC<RecommendationSectionProps> = ({
                     </span>
 
                     <span className="text-[10px] font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-200">
-                      CB: {Math.round(rec.contentBasedScore * 100)}% | CF: {Math.round(rec.collaborativeScore * 100)}%
+                      CB: {cbPercent}% | CF: {cfPercent}%
                     </span>
                   </div>
 
                   {/* College & Year */}
                   <span className="text-xs font-bold text-[#1a4731] block mb-1">
-                    {paper.department} • {collegeInfo?.name.replace('College of ', '')}
+                    {paper.department} • {collegeInfo?.name ? collegeInfo.name.replace('College of ', '') : paper.department}
                   </span>
 
                   {/* Paper Title - Responsive */}
@@ -137,7 +148,7 @@ export const RecommendationSection: React.FC<RecommendationSectionProps> = ({
                       TF-IDF Matched Vectors:
                     </span>
                     <div className="flex flex-wrap gap-1">
-                      {rec.matchedKeywords.map((term, i) => (
+                      {matchedTerms.slice(0, 4).map((term, i) => (
                         <span
                           key={i}
                           className="px-2 py-0.5 rounded text-[10px] bg-[#c9a84c]/10 text-[#1a4731] border border-[#c9a84c]/30 font-mono font-medium"

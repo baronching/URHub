@@ -8,7 +8,7 @@
  *    - Collaborative Filtering (User-User Academic Cosine Similarity)
  */
 
-import { Research, User, RecommendationScore } from '../types';
+import { Research, User, Recommendation } from '../types';
 
 const STOPWORDS = new Set([
   'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren\'t', 'as', 'at',
@@ -182,12 +182,12 @@ export function generateHybridRecommendations(
   allResearch: Research[],
   contentWeight = 0.6,
   collabWeight = 0.4
-): RecommendationScore[] {
+): (Recommendation & { matchReasons?: string[]; contentScore?: number })[] {
   const approvedPapers = allResearch.filter(r => r.status === 'approved' || !r.status);
   if (approvedPapers.length === 0) return [];
 
   const userReadHistory = new Set(user.readingHistory || []);
-  const scores: RecommendationScore[] = [];
+  const scores: (Recommendation & { matchReasons?: string[]; contentScore?: number })[] = [];
 
   // 1. Content-Based Scoring: Match User College, Course, and historical keywords
   const userCollege = user.college || 'CCS';
@@ -271,11 +271,15 @@ export function generateHybridRecommendations(
     }
 
     scores.push({
+      recommendID: `rec-${user.userID}-${paper.researchID}`,
+      userID: user.userID,
       researchID: paper.researchID,
-      score: hybridScore,
-      contentScore,
-      collaborativeScore: collabScore,
-      matchReasons: Array.from(new Set(matchReasons))
+      score: hybridScore / 100,
+      contentBasedScore: contentScore / 100,
+      collaborativeScore: collabScore / 100,
+      matchedKeywords: (paper.keywords && paper.keywords.length > 0) ? paper.keywords : [paper.department, 'Academic Research'],
+      matchReasons: Array.from(new Set(matchReasons)),
+      contentScore
     });
   }
 
