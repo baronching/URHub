@@ -9,6 +9,7 @@ import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { INITIAL_RESEARCH, INITIAL_SUBMISSIONS, INITIAL_SYSTEM_SETTINGS, INITIAL_USERS } from './src/data/mockDatabase';
 import { generateHybridRecommendations, calculateIDF, getResearchTokens, scoreSearchRelevance } from './src/utils/mlEngine';
+import { generateContextualAcademicAnswer } from './src/utils/researchAiAssistant';
 import { Research, Submission, User, SystemSettings, UDMCollege, UDM_COLLEGES } from './src/types';
 
 export const app = express();
@@ -612,72 +613,7 @@ CRITICAL RESPONSE GUIDELINES:
 
     // Resilient contextual response if external AI is momentarily under high demand
     if (!reply) {
-      const qLower = message.toLowerCase();
-      const isTagalog = qLower.includes('ano') || qLower.includes('paano') || qLower.includes('bakit') || qLower.includes('suliranin') || qLower.includes('solusyon') || qLower.includes('ito') || qLower.includes('alin');
-      const sentences = (research.abstract || '').split(/(?<=[.?!])\s+/).filter(Boolean);
-      const authorsStr = Array.isArray(research.authors) ? research.authors.join(', ') : (research.authors || 'mga mananaliksik');
-
-      if (qLower.includes('suliranin') || qLower.includes('solusyon') || qLower.includes('problem') || qLower.includes('solution') || qLower.includes('layunin')) {
-        reply = isTagalog
-          ? `Narito ang malalimang pagsusuri sa suliranin at solusyon ng pananaliksik na **"${research.title}"**:\n\n` +
-            `### 1. Pangunahing Suliranin (Core Problem)\n` +
-            `• **Pangunahing Hamon:** ${sentences[0] || `Tinutugunan ng pag-aaral ang mga hamon at kakulangan sa larangan ng ${research.course || research.department}.`}\n` +
-            `• **Epekto sa Sektor:** Ang kawalan ng modernong sistema o empirical framework ay nagdudulot ng operational delay at inefficiency sa target na komunidad o sektor sa Lungsod ng Maynila.\n\n` +
-            `### 2. Ipinapanukalang Solusyon (Proposed Solution)\n` +
-            `• **Matalinong Pamamaraan:** ${sentences[1] || `Iminumungkahi ng pananaliksik ang pagpapatupad ng makabagong framework na may kaugnayan sa ${Array.isArray(research.keywords) ? research.keywords.slice(0, 3).join(', ') : research.keywords}.`}\n` +
-            `• **Inobasyon:** Nagsisilbi itong teknikal at siyentipikong kasagutan upang mapabilis at mapabuti ang proseso alinsunod sa pamantayan ng Universidad de Manila.\n\n` +
-            `### 3. Inaasahang Epekto at Resulta (Impact)\n` +
-            `• ${sentences[2] || 'Nagpapakita ng positibong resulta sa pagsusuri at nagbibigay ng maaasahang datos para sa mga susunod na mananaliksik at mag-aaral ng UDM.'}`
-          : `Here is the comprehensive problem and solution breakdown for **"${research.title}"**:\n\n` +
-            `### 1. Core Problem Statement\n` +
-            `• ${sentences[0] || `Addresses key operational and technical challenges within ${research.course || research.department}.`}\n\n` +
-            `### 2. Proposed Solution\n` +
-            `• ${sentences[1] || `Develops a structured methodology utilizing ${Array.isArray(research.keywords) ? research.keywords.slice(0, 3).join(', ') : 'innovative techniques'}.`}\n\n` +
-            `### 3. Key Outcomes & Impact\n` +
-            `• ${sentences[2] || 'Demonstrates empirical improvements and validated practical applicability.'}`;
-      } else if (qLower.includes('manila') || qLower.includes('udm') || qLower.includes('komunidad') || qLower.includes('applied') || qLower.includes('application')) {
-        reply = isTagalog
-          ? `Ang pananaliksik na **"${research.title}"** ay may mahalagang kapakinabangan sa Universidad de Manila at sa Lungsod ng Maynila:\n\n` +
-            `• **Para sa Lungsod ng Maynila:** Maaari itong gamitin ng mga lokal na barangay at ahensya ng pamahalaan bilang gabay sa modernisasyon, pagpapabuti ng pampublikong serbisyo, at pagpapatupad ng data-driven governance.\n` +
-            `• **Para sa Universidad de Manila (UDM):** Pinatataas nito ang antas ng institutional research ng ${research.department} at nagbibigay ng matibay na reference para sa mga mag-aaral na gagawa ng capstone projects.\n` +
-            `• **Akademikong Pamana:** Nagsisilbing patunay sa kakayahan ng mga Merlions na mag-ambag ng praktikal na solusyon sa mga totoong suliranin ng kapitolyo.`
-          : `Practical applications of **"${research.title}"** for UDM and the City of Manila:\n\n` +
-            `• **Local Government (Manila City):** Provides actionable frameworks for urban planning, service automation, and civic efficiency.\n` +
-            `• **Universidad de Manila Ecosystem:** Elevates academic excellence in ${research.department} by setting a benchmark for empirical capstone research.\n` +
-            `• **Community Impact:** Translates classroom theory into impactful societal benefits for Manila constituents.`;
-      } else if (qLower.includes('metodolohiya') || qLower.includes('methodology') || qLower.includes('algorithm') || qLower.includes('paraan') || qLower.includes('framework')) {
-        reply = isTagalog
-          ? `Narito ang metodolohiya at pamamaraan ng pag-aaral na **"${research.title}"**:\n\n` +
-            `• **Disenyo ng Pananaliksik (Research Design):** Isinagawa sa ilalim ng kurikulum ng ${research.course || research.department} gamit ang quantitative/descriptive at empirical validation.\n` +
-            `• **Pangangalap ng Datos (Data Collection):** ${sentences[1] || 'Kinalap ang mga kinakailangang datos gamit ang structured sampling at experimental testing.'}\n` +
-            `• **Teknikal na Sangkap:** Nakasentro sa mga domain concepts tulad ng ${Array.isArray(research.keywords) ? research.keywords.join(', ') : research.keywords}.\n` +
-            `• **Pagsusuri at Ebalwasyon:** Binalido ang modelo batay sa accuracy, operational viability, at statistical metrics.`
-          : `Methodology and technical architecture of **"${research.title}"**:\n\n` +
-            `• **Research Framework:** Conducted under ${research.department} academic protocols using empirical verification.\n` +
-            `• **Core Tools & Concepts:** Implements ${Array.isArray(research.keywords) ? research.keywords.join(', ') : research.keywords}.\n` +
-            `• **Validation Protocol:** Assessed against functional requirements and institutional benchmarks.`;
-      } else if (qLower.includes('gap') || qLower.includes('future') || qLower.includes('direksyon') || qLower.includes('kasunod') || qLower.includes('direction')) {
-        reply = isTagalog
-          ? `Mga pananaliksik at thesis gaps na maaaring ipagpatuloy mula sa **"${research.title}"**:\n\n` +
-            `1. **Longitudinal at Multi-Site Testing:** Palawakin ang sakop ng testing sa labas ng pilot area at ipatupad sa lahat ng 897 barangays sa Maynila.\n` +
-            `2. **Pagsasama ng Machine Learning / AI:** Magdagdag ng predictive analytics o real-time automation gamit ang mga bagong algorithms.\n` +
-            `3. **Mobile & Cloud Integration:** Gumawa ng kasamang mobile app o centralized web dashboard para sa mga administrator at publiko.`
-          : `Future research directions and thesis opportunities from **"${research.title}"**:\n\n` +
-            `1. **Scalability Testing:** Expand deployment parameters across broader urban districts in the City of Manila.\n` +
-            `2. **Advanced Machine Learning:** Integrate deep learning and predictive modeling for enhanced operational precision.\n` +
-            `3. **Cloud & IoT Integration:** Complement the framework with real-time cloud analytics and mobile dashboards.`;
-      } else {
-        reply = isTagalog
-          ? `Salamat sa iyong katanungan tungkol sa **"${research.title}"** nina ${authorsStr} (${research.department}, ${research.year || '2024'}).\n\n` +
-            `Ang pag-aaral na ito ay nakatuon sa temang **${Array.isArray(research.keywords) ? research.keywords.join(', ') : research.keywords}**:\n\n` +
-            `• **Kahalagahan:** ${sentences[0] || 'Nagbibigay ito ng mahalagang ambag sa pagsulong ng kaalaman sa kolehiyo.'}\n` +
-            `• **Pangunahing Nilalaman:** ${sentences[1] || 'Siniyasat ng mga mananaliksik ang pinakamabisang pamamaraan upang makamit ang layunin ng pag-aaral.'}\n` +
-            `• **Rekomendasyon sa Pagbasa:** Para sa mga partikular na statistical tables at complete code/schematics, maaari kang magsumite ng Access Request sa URELIA Office gamit ang Full Paper tab.`
-          : `Academic overview for **"${research.title}"** by ${authorsStr} (${research.department}):\n\n` +
-            `• **Domain Focus:** Centered on ${Array.isArray(research.keywords) ? research.keywords.join(', ') : research.keywords}.\n` +
-            `• **Core Findings:** ${sentences[0] || 'Delivers empirical research contributions tailored for institutional implementation.'}\n` +
-            `• **Full-Text Consultation:** Detailed chapters and technical datasets can be requested through the URELIA Office via the Full Paper tab.`;
-      }
+      reply = generateContextualAcademicAnswer(message, research);
     }
 
     res.json({ success: true, reply });
