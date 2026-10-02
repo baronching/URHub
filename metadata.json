@@ -1,0 +1,8 @@
+{
+  "name": "UDM-ResearchHub",
+  "description": "An AI-Powered Web-Based Research Archives for Universidad de Manila Using Machine Learning (URELIA Office).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
