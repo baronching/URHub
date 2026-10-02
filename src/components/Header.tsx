@@ -93,8 +93,18 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center space-x-2 sm:space-x-2.5 shrink-0 cursor-pointer select-none"
             onClick={() => handleTabClick('archive')}
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white rounded-full p-0.5 flex items-center justify-center shadow-md border border-[#c9a84c] shrink-0">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-[#1a4731] rounded-full flex items-center justify-center font-bold text-[11px] sm:text-xs text-[#c9a84c]">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full p-0.5 flex items-center justify-center shadow-md border-2 border-[#c9a84c] shrink-0 overflow-hidden">
+              <img 
+                src="/udm-logo.png" 
+                alt="Universidad de Manila Official Seal" 
+                className="w-full h-full object-contain rounded-full"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback') as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div className="logo-fallback hidden w-7 h-7 sm:w-8 sm:h-8 bg-[#1a4731] rounded-full flex items-center justify-center font-bold text-[11px] sm:text-xs text-[#c9a84c]">
                 UDM
               </div>
             </div>
