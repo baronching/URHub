@@ -34,7 +34,14 @@ import { calculateIDF, getResearchTokens, scoreSearchRelevance, generateHybridRe
 import { INITIAL_USERS, INITIAL_RESEARCH, INITIAL_SUBMISSIONS } from './data/mockDatabase';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('udm_active_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [activeTab, setActiveTab] = useState<string>('archive');
   const [rawResearchList, setRawResearchList] = useState<Research[]>(INITIAL_RESEARCH);
@@ -116,7 +123,11 @@ export default function App() {
             console.warn('Could not load user profile from Supabase:', err);
           }
         } else {
-          setCurrentUser(null);
+          // If no active Supabase session, check if a demo user is logged in
+          const savedDemoUser = localStorage.getItem('udm_active_user');
+          if (!savedDemoUser) {
+            setCurrentUser(null);
+          }
         }
       });
       unsubscribeAuth = () => authListener.subscription.unsubscribe();
@@ -410,11 +421,13 @@ export default function App() {
         onOpenAuth={() => setShowAuthModal(true)}
         onLogout={async () => {
           try {
+            localStorage.removeItem('udm_active_user');
             await logoutUserWithSupabase();
           } catch (e) {
             console.warn(e);
           }
           setCurrentUser(null);
+          setActiveTab('archive');
           triggerToast('Logged out of UDM account.');
         }}
         activeTab={activeTab}
@@ -549,6 +562,14 @@ export default function App() {
           onClose={() => setShowAuthModal(false)}
           onLoginSuccess={(user) => {
             setCurrentUser(user);
+            try {
+              localStorage.setItem('udm_active_user', JSON.stringify(user));
+            } catch {}
+            if (user.role === 'admin') {
+              setActiveTab('admin_review');
+            } else if (user.role === 'super_admin') {
+              setActiveTab('super_admin');
+            }
             triggerToast(`Welcome back, ${user.name}!`);
           }}
         />

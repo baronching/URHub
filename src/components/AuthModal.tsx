@@ -63,45 +63,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Admin Demo Login Shortcut (Admin demo kept as-is)
-  const handleQuickDemoLogin = async (demoEmail: string, demoRole: string) => {
-    setEmail(demoEmail);
-    setPassword('Password123!');
-    setIsLoading(true);
+  // Admin Demo Login Shortcut (Instant 1-click evaluation access)
+  const handleQuickDemoLogin = (demoEmail: string, demoRole: string) => {
     setErrorMsg('');
+    setIsLoading(false);
+
+    // Direct lookup from seed database
+    const found = INITIAL_USERS.find(u => u.email.toLowerCase() === demoEmail.toLowerCase());
+    const targetUser: User = found || {
+      userID: demoRole === 'super_admin' ? 'USR-UDM-004' : 'USR-UDM-003',
+      name: demoRole === 'super_admin' ? 'Engr. System Admin' : 'Dr. Alejandro Reyes',
+      email: demoEmail,
+      role: demoRole as any,
+      college: demoRole === 'super_admin' ? 'CCS' : 'CPPG',
+      course: demoRole === 'super_admin' ? 'BS in Information Technology' : 'BS in Public Administration',
+      readingHistory: []
+    };
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: demoEmail, password: 'Password123!' })
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        onLoginSuccess(data.user);
-        onClose();
-        return;
-      }
-      // Direct fallback to pre-configured demo users
-      const fallbackUser = INITIAL_USERS.find(u => u.email.toLowerCase() === demoEmail.toLowerCase());
-      if (fallbackUser) {
-        onLoginSuccess(fallbackUser);
-        onClose();
-        return;
-      }
-      throw new Error('Login failed.');
-    } catch (err: any) {
-      const fallbackUser = INITIAL_USERS.find(u => u.email.toLowerCase() === demoEmail.toLowerCase());
-      if (fallbackUser) {
-        onLoginSuccess(fallbackUser);
-        onClose();
-      } else {
-        setErrorMsg(err.message || 'Login failed.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
+      localStorage.setItem('udm_active_user', JSON.stringify(targetUser));
+    } catch {}
+
+    onLoginSuccess(targetUser);
+    onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
