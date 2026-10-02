@@ -13,17 +13,26 @@ export const SuperAdminManagement: React.FC = () => {
     setIsLoading(true);
     try {
       const [uRes, sRes] = await Promise.all([
-        fetch('/api/admin/users'),
-        fetch('/api/admin/settings')
+        fetch('/api/admin/users').catch(() => null),
+        fetch('/api/admin/settings').catch(() => null)
       ]);
 
-      const uData = await uRes.json();
-      const sData = await sRes.json();
+      let uData = INITIAL_USERS;
+      let sData = INITIAL_SYSTEM_SETTINGS;
+
+      if (uRes && uRes.ok && (uRes.headers.get('content-type') || '').includes('application/json')) {
+        uData = await uRes.json();
+      }
+      if (sRes && sRes.ok && (sRes.headers.get('content-type') || '').includes('application/json')) {
+        sData = await sRes.json();
+      }
 
       setUsers(uData);
       setSettings(sData);
     } catch (err) {
-      console.error(err);
+      console.warn('Using local fallback for settings/users:', err);
+      setUsers(INITIAL_USERS);
+      setSettings(INITIAL_SYSTEM_SETTINGS);
     } finally {
       setIsLoading(false);
     }

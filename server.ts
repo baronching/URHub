@@ -6,7 +6,6 @@
 import express, { Request, Response } from 'express';
 import http from 'http';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { INITIAL_RESEARCH, INITIAL_SUBMISSIONS, INITIAL_SYSTEM_SETTINGS, INITIAL_USERS } from './src/data/mockDatabase';
 import { generateHybridRecommendations, calculateIDF, getResearchTokens, scoreSearchRelevance } from './src/utils/mlEngine';
@@ -681,6 +680,7 @@ async function startServer() {
   const httpServer = http.createServer(app);
 
   if (isDev) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
