@@ -181,6 +181,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
+          history: chatMessages.slice(-6).map(m => ({ role: m.role, text: m.text })),
           research: {
             title: research.title,
             abstract: research.abstract,
@@ -194,10 +195,24 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
       });
       const contentType = res.headers.get('content-type') || '';
       if (!res.ok || !contentType.includes('application/json')) {
-        const fallbackAnswer = `Based on "${research.title}" (${research.department}), the study addresses ${research.keywords.slice(0, 3).join(', ')}. Key findings emphasize empirical results documented in the abstract.`;
+        const qLower = text.toLowerCase();
+        const isTagalog = qLower.includes('ano') || qLower.includes('paano') || qLower.includes('suliranin') || qLower.includes('solusyon') || qLower.includes('ito');
+        const sentences = (research.abstract || '').split(/(?<=[.?!])\s+/).filter(Boolean);
+        
+        let dynamicAnswer = '';
+        if (qLower.includes('suliranin') || qLower.includes('solusyon') || qLower.includes('problem')) {
+          dynamicAnswer = isTagalog
+            ? `Narito ang pagsusuri sa suliranin at solusyon ng "${research.title}":\n\n• Pangunahing Suliranin: ${sentences[0] || 'Ang hamon sa kasalukuyang operasyon sa sektor na ito.'}\n• Solusyon: ${sentences[1] || 'Ang ipinanukalang sistema at makabagong pamamaraan ng mga mananaliksik.'}\n• Inaasahang Epekto: ${sentences[2] || 'Makatutulong ito sa pagpapataas ng episyensya at kalidad ng serbisyo.'}`
+            : `Here is the problem and solution breakdown for "${research.title}":\n\n• Core Problem: ${sentences[0] || 'Operational inefficiencies and challenges in this domain.'}\n• Proposed Solution: ${sentences[1] || 'Development of a structured methodology and technical intervention.'}\n• Key Impact: ${sentences[2] || 'Measurable improvements in process performance and academic validation.'}`;
+        } else {
+          dynamicAnswer = isTagalog
+            ? `Tungkol sa iyong tanong ukol sa "${research.title}":\n\n${sentences.slice(0, 2).join(' ')}\n\nPara sa kumpletong pagsusuri, basahin ang abstract at buong kabanata sa URELIA Reader.`
+            : `Regarding your inquiry on "${research.title}":\n\n${sentences.slice(0, 2).join(' ')}\n\nRefer to the official URELIA archival manuscript for extended technical findings.`;
+        }
+
         const assistantMsg = {
           role: 'assistant' as const,
-          text: fallbackAnswer,
+          text: dynamicAnswer,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setChatMessages(prev => [...prev, assistantMsg]);
@@ -214,7 +229,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
     } catch (err: any) {
       const errMsg = {
         role: 'assistant' as const,
-        text: `Error: ${err.message || 'Unable to connect to AI assistant.'}`,
+        text: `Paumanhin, nagkaroon ng pansamantalang error: ${err.message || 'Subukan muli makalipas ang ilang sandali.'}`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setChatMessages(prev => [...prev, errMsg]);
