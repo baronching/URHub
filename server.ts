@@ -13,7 +13,7 @@ import { generateContextualAcademicAnswer } from './src/utils/researchAiAssistan
 import { Research, Submission, User, SystemSettings, UDMCollege, UDM_COLLEGES } from './src/types';
 
 export const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Initialize Google Gemini SDK with server-side API key and telemetry header
 const ai = new GoogleGenAI({
@@ -685,19 +685,48 @@ Respond ONLY with valid JSON.`;
 
 async function startServer() {
   const isDev = process.env.NODE_ENV !== 'production';
-
   const httpServer = http.createServer(app);
 
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`UDM-ResearchHub Express server listening at http://localhost:${PORT}`);
+  });
+
   if (isDev) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: false,
-      },
-      appType: 'spa',
+    let viteMiddleware: any = null;
+    app.use((req: Request, res: Response, next: any) => {
+      if (viteMiddleware) {
+        return viteMiddleware(req, res, next);
+      }
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      const startTime = Date.now();
+      const interval = setInterval(() => {
+        if (viteMiddleware) {
+          clearInterval(interval);
+          return viteMiddleware(req, res, next);
+        }
+        if (Date.now() - startTime > 15000) {
+          clearInterval(interval);
+          return res.status(503).send('Development server is still starting up, please refresh in a moment.');
+        }
+      }, 50);
     });
-    app.use(vite.middlewares);
+
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          hmr: false,
+        },
+        appType: 'spa',
+      });
+      viteMiddleware = vite.middlewares;
+      console.log('Vite development middlewares attached.');
+    } catch (err: any) {
+      console.error('Failed to initialize Vite dev server:', err);
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
@@ -705,10 +734,6 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
-
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`UDM-ResearchHub Express server listening at http://localhost:${PORT}`);
-  });
 }
 
 if (process.env.VERCEL !== '1') {
