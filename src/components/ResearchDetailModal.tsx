@@ -56,7 +56,6 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const totalViewerPages = 14; // Simulated view-only manuscript pages
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
-  const [isSubmittingRequest, setIsSubmittingRequest] = useState<boolean>(false);
 
   // Gemini AI Assistant State
   const [aiSummary, setAiSummary] = useState<any | null>(null);
@@ -281,26 +280,8 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
 
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
 
-  // Access Permission evaluation
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
-  const userAccessRequest = currentUser
-    ? accessRequests.find(r => r.userID === currentUser.userID && r.researchID === research.researchID)
-    : null;
-
-  const hasFullAccess = isAdmin || userAccessRequest?.status === 'approved';
-  const isRequestPending = userAccessRequest?.status === 'pending';
-  const isRequestRejected = userAccessRequest?.status === 'rejected';
-
-  const handleRequestAccessSubmit = async () => {
-    setIsSubmittingRequest(true);
-    try {
-      await onRequestAccess(research);
-    } catch (err) {
-      console.error('Error submitting access request:', err);
-    } finally {
-      setIsSubmittingRequest(false);
-    }
-  };
+  // Access Permission: Signed-in UDM accounts can access full research manuscripts directly
+  const hasFullAccess = Boolean(currentUser);
 
   // Download Abstract as PDF using jsPDF
   const handleDownloadAbstractPdf = () => {
@@ -506,14 +487,16 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              <Lock className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
-              <span className="truncate">Reader</span>
               {hasFullAccess ? (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">Unlocked</span>
-              ) : isRequestPending ? (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-bold shrink-0">Pending</span>
+                <BookOpen className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
               ) : (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-700 font-bold shrink-0">Locked</span>
+                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              )}
+              <span className="truncate">Full Paper</span>
+              {hasFullAccess ? (
+                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">Available</span>
+              ) : (
+                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-700 font-bold shrink-0">Sign In</span>
               )}
             </button>
           </div>
@@ -539,117 +522,65 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
           {activeTab === 'abstract' ? (
             /* ABSTRACT & METADATA VIEW */
             <div className="space-y-4 sm:space-y-6">
-              {/* Access Control Box */}
+              {/* Access Banner & Action: Sign in to unlock full research */}
               {!currentUser ? (
-                <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs">
                   <div className="flex items-start space-x-3 text-xs">
                     <div className="p-2 rounded-lg bg-slate-200 text-slate-700 shrink-0">
                       <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-700" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm mb-0.5">Full Document Access Restricted</h4>
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm mb-0.5">Full Research Access</h4>
                       <p className="text-slate-600 leading-normal">
-                        Only abstract and metadata are publicly viewable. Sign in with your UDM account to request full document access.
+                        Abstract and metadata are publicly accessible. Sign in with your official UDM account to view the full research manuscript.
                       </p>
                     </div>
                   </div>
                   {onOpenAuthModal && (
                     <button
                       onClick={onOpenAuthModal}
-                      className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shrink-0 shadow-sm flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+                      className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shrink-0 shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer"
                     >
                       <KeyRound className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c9a84c] shrink-0" />
-                      <span>Sign In to Request Access</span>
+                      <span>Sign In to Read Full Research</span>
                     </button>
                   )}
                 </div>
-              ) : hasFullAccess ? (
-                <div className="p-3.5 sm:p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 text-xs text-emerald-900">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 shrink-0">
-                      <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-emerald-900 text-xs sm:text-sm">Full Document Access Granted</h4>
-                      <p className="text-emerald-700 leading-normal">
-                        {isAdmin ? 'You have administrative privileges to view full manuscripts.' : 'Your request for full document access was approved by the Research Admin.'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setActiveTab('view_only_reader')}
-                    className="px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shrink-0 shadow-sm flex items-center justify-center space-x-1.5 cursor-pointer"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c9a84c] shrink-0" />
-                    <span>Open Full Paper Reader</span>
-                  </button>
-                </div>
-              ) : isRequestPending ? (
-                <div className="p-4 sm:p-5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 text-xs text-amber-900">
-                  <div className="flex items-start space-x-3">
-                    <div className="p-2 rounded-lg bg-amber-100 text-amber-800 shrink-0">
-                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 animate-pulse" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-amber-900 text-xs sm:text-sm mb-0.5">Access Request Pending Review</h4>
-                      <p className="text-amber-800 leading-normal">
-                        Your request to view the full document was submitted on <strong>{userAccessRequest?.dateRequested}</strong> and is currently being evaluated by the Research Admin.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="self-start sm:self-center px-3 py-1.5 rounded-lg font-bold text-xs bg-amber-200 text-amber-900 uppercase shrink-0">
-                    Pending Approval
-                  </span>
-                </div>
-              ) : isRequestRejected ? (
-                <div className="p-4 sm:p-5 bg-rose-50 border border-rose-200 rounded-xl space-y-3 text-xs text-rose-900">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                    <div className="flex items-start space-x-3">
-                      <div className="p-2 rounded-lg bg-rose-100 text-rose-800 shrink-0">
-                        <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-rose-700" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-rose-900 text-xs sm:text-sm mb-0.5">Access Request Rejected</h4>
-                        <p className="text-rose-800 leading-normal">
-                          Your access request was rejected by the Research Coordinator on {userAccessRequest?.dateReviewed || 'recently'}.
-                        </p>
-                        {userAccessRequest?.reviewNote && (
-                          <p className="mt-1.5 font-medium italic text-slate-700 bg-white p-2.5 rounded border border-rose-200">
-                            "Note from coordinator: {userAccessRequest.reviewNote}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      disabled={isSubmittingRequest}
-                      onClick={handleRequestAccessSubmit}
-                      className="px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold bg-rose-700 hover:bg-rose-800 text-white shrink-0 shadow-sm transition-all cursor-pointer"
-                    >
-                      {isSubmittingRequest ? 'Re-Submitting...' : 'Re-Request Access'}
-                    </button>
-                  </div>
-                </div>
               ) : (
-                <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 to-slate-50 border border-[#1a4731]/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-sm">
-                  <div className="flex items-start space-x-3 text-xs">
-                    <div className="p-2 rounded-lg bg-[#1a4731]/10 text-[#1a4731] shrink-0 border border-[#1a4731]/20">
-                      <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-[#1a4731]" />
+                <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700" />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-[#1a4731] text-xs sm:text-sm mb-0.5">Request Full Document Access</h4>
-                      <p className="text-slate-600 leading-normal">
-                        Submit an institutional access request to view the full manuscript. Your request will be evaluated by the URELIA Research Coordinator.
+                    <div className="min-w-0">
+                      <p className="font-bold text-emerald-900 text-xs sm:text-sm truncate">
+                        Full Research Manuscript Available
+                      </p>
+                      <p className="text-emerald-700 text-[11px] truncate">
+                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email})
                       </p>
                     </div>
                   </div>
-                  <button
-                    disabled={isSubmittingRequest}
-                    onClick={handleRequestAccessSubmit}
-                    className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shrink-0 shadow-md flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <KeyRound className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c9a84c] shrink-0" />
-                    <span>{isSubmittingRequest ? 'Submitting Request...' : 'Request Full Access'}</span>
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setActiveTab('view_only_reader')}
+                      className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
+                    >
+                      <BookOpen className="w-4 h-4 text-[#c9a84c] shrink-0" />
+                      <span>Read Full Research</span>
+                    </button>
+                    {research.fullPdfUrl && (
+                      <a
+                        href={research.fullPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold bg-white text-[#1a4731] border border-[#1a4731]/40 hover:bg-emerald-50/50 shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer transition-all"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />
+                        <span>Source PDF</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1048,42 +979,20 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   <Lock className="w-6 h-6 sm:w-7 sm:h-7 text-amber-700" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Full Manuscript Reader Locked</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Sign In to Read Full Research</h3>
                   <p className="text-xs text-slate-600 max-w-md mx-auto leading-normal">
-                    Full research manuscripts are restricted by URELIA institutional policy. You must be an authorized Research Admin or have an approved access request to view the manuscript.
+                    Abstract and metadata are publicly accessible. To read the complete research manuscript in protected view-only mode, please sign in with your official UDM account.
                   </p>
                 </div>
 
                 <div className="pt-2">
-                  {!currentUser ? (
-                    <div className="space-y-3">
-                      <p className="text-xs font-semibold text-slate-500">Log in with your UDM student or faculty account to request access.</p>
-                      {onOpenAuthModal && (
-                        <button
-                          onClick={onOpenAuthModal}
-                          className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
-                        >
-                          <KeyRound className="w-4 h-4 text-[#c9a84c]" />
-                          <span>Sign In to Request Access</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : isRequestPending ? (
-                    <div className="p-3.5 sm:p-4 bg-amber-100/70 border border-amber-300 rounded-xl inline-block max-w-md text-left text-xs text-amber-900 space-y-1">
-                      <div className="flex items-center space-x-2 font-bold">
-                        <Clock className="w-4 h-4 text-amber-700 animate-pulse" />
-                        <span>Access Request Submitted ({userAccessRequest?.dateRequested})</span>
-                      </div>
-                      <p className="text-amber-800">Your request for this manuscript is pending approval by the URELIA Research Coordinator.</p>
-                    </div>
-                  ) : (
+                  {onOpenAuthModal && (
                     <button
-                      disabled={isSubmittingRequest}
-                      onClick={handleRequestAccessSubmit}
-                      className="px-5 py-2.5 sm:px-6 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
+                      onClick={onOpenAuthModal}
+                      className="px-5 py-2.5 sm:px-6 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
                     >
                       <KeyRound className="w-4 h-4 text-[#c9a84c]" />
-                      <span>{isSubmittingRequest ? 'Submitting Request...' : 'Submit Request for Full Access'}</span>
+                      <span>Sign In to Read Full Research</span>
                     </button>
                   )}
                 </div>
