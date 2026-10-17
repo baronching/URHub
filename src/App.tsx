@@ -176,14 +176,11 @@ export default function App() {
 
     if (filters.authorCategory && filters.authorCategory !== 'ALL') {
       list = list.filter(r => {
-        if (filters.authorCategory === 'Faculty') {
-          return r.authorCategory === 'Faculty' || r.department === 'FACULTY';
-        }
-        if (filters.authorCategory === 'Administration') {
-          return r.authorCategory === 'Administration' || r.department === 'ADMIN';
+        if (filters.authorCategory === 'Faculty_Admin') {
+          return r.authorCategory === 'Faculty_Admin' || r.department === 'FAC-ADM';
         }
         if (filters.authorCategory === 'Student') {
-          return (!r.authorCategory || r.authorCategory === 'Student') && r.department !== 'FACULTY' && r.department !== 'ADMIN';
+          return (!r.authorCategory || r.authorCategory === 'Student') && r.department !== 'FAC-ADM';
         }
         return true;
       });
@@ -255,7 +252,7 @@ export default function App() {
   // 4. Calculate Analytics from live Firestore records
   useEffect(() => {
     const collegeBreakdown: Record<UDMCollege, number> = {
-      CBM: 0, CAS: 0, CPPG: 0, CCS: 0, CHS: 0, CED: 0, CCJ: 0, FACULTY: 0, ADMIN: 0
+      CBM: 0, CAS: 0, CPPG: 0, CCS: 0, CHS: 0, CED: 0, CCJ: 0, 'FAC-ADM': 0
     };
     const courseBreakdown: Record<string, number> = {};
     const yearlyDistribution: Record<number, number> = {};

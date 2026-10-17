@@ -433,18 +433,16 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
           <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0 flex-1">
             <div
               className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg text-white flex items-center justify-center font-bold text-[10px] sm:text-xs uppercase shrink-0 shadow-xs ${
-                research.department === 'FACULTY' || research.authorCategory === 'Faculty'
-                  ? 'bg-indigo-700'
-                  : research.department === 'ADMIN' || research.authorCategory === 'Administration'
+                research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin'
                   ? 'bg-amber-700'
                   : 'bg-[#1a4731]'
               }`}
             >
-              {research.department === 'FACULTY' ? 'FAC' : research.department === 'ADMIN' ? 'ADM' : research.department}
+              {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? 'F&A' : research.department}
             </div>
             <div className="min-w-0 flex-1">
               <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider block truncate ${
-                research.department === 'FACULTY' ? 'text-indigo-800' : research.department === 'ADMIN' ? 'text-amber-800' : 'text-[#1a4731]'
+                research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? 'text-amber-800' : 'text-[#1a4731]'
               }`}>
                 {collegeInfo?.name || research.department}
               </span>
@@ -664,15 +662,13 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                 {/* Key metadata chips */}
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-slate-600">
                   <span className={`flex items-center space-x-1 font-bold px-2 py-0.5 rounded-md ${
-                    research.department === 'FACULTY' || research.authorCategory === 'Faculty'
-                      ? 'bg-indigo-50 text-indigo-950 border border-indigo-200'
-                      : research.department === 'ADMIN' || research.authorCategory === 'Administration'
+                    research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin'
                       ? 'bg-amber-50 text-amber-950 border border-amber-200'
                       : 'bg-slate-100 text-[#1a4731]'
                   }`}>
                     <Building2 className="w-3.5 h-3.5 shrink-0" />
                     <span>
-                      {research.department === 'FACULTY' ? '👨‍🏫 Faculty Publication' : research.department === 'ADMIN' ? '🏛️ Institutional Study' : research.department} • {research.course}
+                      {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? '👨‍🏫🏛️ Faculty & Administration Research' : research.department} • {research.course}
                     </span>
                   </span>
                   <span className="flex items-center space-x-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">

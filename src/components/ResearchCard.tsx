@@ -29,17 +29,19 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
           <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0">
             <span
               className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider shrink-0 ${
-                research.department === 'FACULTY' || research.authorCategory === 'Faculty'
-                  ? 'bg-indigo-700 shadow-2xs'
-                  : research.department === 'ADMIN' || research.authorCategory === 'Administration'
+                research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin'
                   ? 'bg-amber-700 shadow-2xs'
                   : 'bg-[#1a4731]'
               }`}
             >
-              {research.department === 'FACULTY' ? '👨‍🏫 FACULTY' : research.department === 'ADMIN' ? '🏛️ ADMIN' : research.department}
+              {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin'
+                ? '👨‍🏫🏛️ FAC-ADM'
+                : research.department}
             </span>
             <span className="text-[11px] sm:text-xs text-slate-500 font-semibold truncate max-w-[140px] sm:max-w-[200px]" title={collegeInfo?.name}>
-              {research.department === 'FACULTY' ? 'Faculty Publication' : research.department === 'ADMIN' ? 'Institutional Study' : collegeInfo?.name.replace('College of ', '') || research.department}
+              {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin'
+                ? 'Faculty & Administration'
+                : collegeInfo?.name.replace('College of ', '') || research.department}
             </span>
           </div>
 

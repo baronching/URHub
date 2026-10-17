@@ -3,15 +3,15 @@
  * Based on Universidad de Manila URELIA Office Capstone Specification
  */
 
-export type UDMCollege = 'CBM' | 'CAS' | 'CPPG' | 'CCS' | 'CHS' | 'CED' | 'CCJ' | 'FACULTY' | 'ADMIN';
+export type UDMCollege = 'CBM' | 'CAS' | 'CPPG' | 'CCS' | 'CHS' | 'CED' | 'CCJ' | 'FAC-ADM';
 
-export type AuthorCategory = 'Student' | 'Faculty' | 'Administration';
+export type AuthorCategory = 'Student' | 'Faculty_Admin';
 
 export const UDM_COLLEGES: {
   id: UDMCollege;
   name: string;
   courses: string[];
-  unitType?: 'College' | 'Faculty' | 'Administration';
+  unitType?: 'College' | 'Faculty & Administration';
   badgeColor?: string;
   description?: string;
 }[] = [
@@ -58,28 +58,17 @@ export const UDM_COLLEGES: {
     unitType: 'College'
   },
   {
-    id: 'FACULTY',
-    name: 'University Faculty & Professorial Research',
+    id: 'FAC-ADM',
+    name: 'Faculty & Administrative Institutional Research',
     courses: [
       'Faculty Pedagogical & Instructional Studies',
-      'Multidisciplinary Faculty Publications',
-      'Professorial Chair Research',
-      'Higher Education Curriculum Innovations'
+      'Institutional Quality Assurance (IQA) & Tracer Studies',
+      'Multidisciplinary Faculty Publications & Professorial Research',
+      'University Strategic Governance & Manila LGU Collaborations',
+      'URELIA Research & Extension Studies'
     ],
-    unitType: 'Faculty',
-    description: 'Peer-reviewed research and scholarly publications authored by UDM professors & faculty'
-  },
-  {
-    id: 'ADMIN',
-    name: 'University Administration & Institutional Research (URELIA / OVPAA)',
-    courses: [
-      'Institutional Quality Assurance (IQA)',
-      'University Strategic Planning & Governance',
-      'URELIA Research & Extension Studies',
-      'Manila City LGU Policy Collaborations'
-    ],
-    unitType: 'Administration',
-    description: 'University-wide tracer studies, governance frameworks, and municipal policy research'
+    unitType: 'Faculty & Administration',
+    description: 'Peer-reviewed studies, institutional frameworks, and policy research authored by UDM faculty professors & university administration'
   }
 ];
 
@@ -92,7 +81,7 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
-  userType?: 'Student' | 'Faculty' | 'Administration';
+  userType?: 'Student' | 'Faculty_Admin';
   college?: UDMCollege;
   idNumber?: string;
   courseProgram?: string;
@@ -199,6 +188,6 @@ export interface SearchFilters {
   college: UDMCollege | 'ALL';
   year: number | 'ALL';
   keyword: string | 'ALL';
-  authorCategory?: 'ALL' | 'Student' | 'Faculty' | 'Administration';
+  authorCategory?: 'ALL' | 'Student' | 'Faculty_Admin';
   sortBy: 'relevance' | 'newest' | 'views';
 }

@@ -55,7 +55,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [userType, setUserType] = useState<'Student' | 'Faculty' | 'Administration'>('Student');
+  const [userType, setUserType] = useState<'Student' | 'Faculty_Admin'>('Student');
   const [college, setCollege] = useState<UDMCollege>('CCS');
   const [idNumber, setIdNumber] = useState('');
   const [courseProgram, setCourseProgram] = useState('');
@@ -328,12 +328,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     </label>
                     <select
                       value={userType}
-                      onChange={e => setUserType(e.target.value as 'Student' | 'Faculty' | 'Administration')}
+                      onChange={e => setUserType(e.target.value as 'Student' | 'Faculty_Admin')}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
                     >
                       <option value="Student">Student</option>
-                      <option value="Faculty">Faculty</option>
-                      <option value="Administration">Administration / Staff</option>
+                      <option value="Faculty_Admin">Faculty & Administration</option>
                     </select>
                   </div>
 

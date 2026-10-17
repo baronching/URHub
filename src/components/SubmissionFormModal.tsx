@@ -33,8 +33,8 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 }) => {
   const [step, setStep] = useState<number>(1);
   const [title, setTitle] = useState('');
-  const [authorCategory, setAuthorCategory] = useState<'Student' | 'Faculty' | 'Administration'>(
-    currentUser?.userType === 'Faculty' ? 'Faculty' : 'Student'
+  const [authorCategory, setAuthorCategory] = useState<'Student' | 'Faculty_Admin'>(
+    currentUser?.userType === 'Faculty_Admin' ? 'Faculty_Admin' : 'Student'
   );
   const [department, setDepartment] = useState<UDMCollege>(currentUser?.college || 'CCS');
   const [course, setCourse] = useState(currentUser?.course || UDM_COLLEGES[0].courses[0]);
@@ -319,26 +319,23 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Research Classification / Origin *
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { id: 'Student' as const, label: '🎓 Student Capstone', desc: 'Authored by student researcher(s)' },
-                    { id: 'Faculty' as const, label: '👨‍🏫 Faculty Research', desc: 'Authored by professors & faculty' },
-                    { id: 'Administration' as const, label: '🏛️ Administration Study', desc: 'Institutional or university policy' }
+                    { id: 'Student' as const, label: '🎓 Student Capstone / Thesis', desc: 'Authored by student researcher(s)' },
+                    { id: 'Faculty_Admin' as const, label: '👨‍🏫🏛️ Faculty & Administration Research', desc: 'Authored by UDM professors, faculty, or university administration' }
                   ].map(cls => (
                     <button
                       key={cls.id}
                       type="button"
                       onClick={() => {
                         setAuthorCategory(cls.id);
-                        if (cls.id === 'Administration') {
-                          handleDepartmentChange('ADMIN');
-                        } else if (cls.id === 'Faculty' && department === 'ADMIN') {
-                          handleDepartmentChange('FACULTY');
-                        } else if (cls.id === 'Student' && (department === 'FACULTY' || department === 'ADMIN')) {
+                        if (cls.id === 'Faculty_Admin' && department !== 'FAC-ADM') {
+                          handleDepartmentChange('FAC-ADM');
+                        } else if (cls.id === 'Student' && department === 'FAC-ADM') {
                           handleDepartmentChange('CCS');
                         }
                       }}
-                      className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                      className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
                         authorCategory === cls.id
                           ? 'border-[#1a4731] bg-emerald-50/70 ring-2 ring-[#1a4731]/20'
                           : 'border-slate-200 bg-white hover:bg-slate-50'

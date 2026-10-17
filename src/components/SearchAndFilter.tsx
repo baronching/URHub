@@ -85,18 +85,17 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         </div>
       </div>
 
-      {/* Research Origin Filter Tabs (Student, Faculty & Administration) */}
+      {/* Research Origin Filter Tabs (Student vs Faculty & Administration) */}
       <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
         <div className="flex items-center space-x-1.5 text-slate-700 font-bold px-1">
           <Users className="w-3.5 h-3.5 text-[#1a4731]" />
-          <span>Research Origin:</span>
+          <span>Research Classification:</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {[
             { id: 'ALL' as const, label: 'All Researches' },
             { id: 'Student' as const, label: '🎓 Student Capstones & Theses' },
-            { id: 'Faculty' as const, label: '👨‍🏫 Faculty Researches' },
-            { id: 'Administration' as const, label: '🏛️ Administration Studies' }
+            { id: 'Faculty_Admin' as const, label: '👨‍🏫🏛️ Faculty & Administration Researches' }
           ].map(tab => {
             const isTabActive = (filters.authorCategory || 'ALL') === tab.id;
             return (
@@ -141,8 +140,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
           {UDM_COLLEGES.map(col => {
             const isSelected = filters.college === col.id;
-            const isFaculty = col.id === 'FACULTY';
-            const isAdmin = col.id === 'ADMIN';
+            const isFacultyAdmin = col.id === 'FAC-ADM';
 
             return (
               <button
@@ -152,18 +150,16 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all border cursor-pointer ${
                   isSelected
                     ? 'bg-[#1a4731] text-white border-[#1a4731] shadow-sm ring-2 ring-[#1a4731]/20'
-                    : isFaculty
-                    ? 'bg-indigo-50/80 text-indigo-950 border-indigo-300 hover:bg-indigo-100 shadow-2xs'
-                    : isAdmin
-                    ? 'bg-amber-50/80 text-amber-950 border-amber-300 hover:bg-amber-100 shadow-2xs'
+                    : isFacultyAdmin
+                    ? 'bg-amber-50/80 text-amber-950 border-amber-300 hover:bg-amber-100 shadow-2xs font-extrabold'
                     : 'bg-white text-slate-700 hover:bg-slate-50 border-[#1a4731]/40'
                 }`}
               >
-                <span className={isSelected ? 'text-[#c9a84c]' : isFaculty ? 'text-indigo-700 font-extrabold' : isAdmin ? 'text-amber-700 font-extrabold' : 'text-[#1a4731]'}>
+                <span className={isSelected ? 'text-[#c9a84c]' : isFacultyAdmin ? 'text-amber-800 font-extrabold' : 'text-[#1a4731]'}>
                   {col.id}
                 </span>
                 <span className="hidden sm:inline text-[10px] opacity-90">
-                  • {isFaculty ? 'Faculty Research' : isAdmin ? 'Administration' : col.name.replace('College of ', '')}
+                  • {isFacultyAdmin ? 'Faculty & Administration' : col.name.replace('College of ', '')}
                 </span>
               </button>
             );
