@@ -404,7 +404,7 @@ app.put('/api/submissions/:id/review', (req: Request, res: Response) => {
 // Analytics and Reporting Engine (Trends by College and Course)
 app.get('/api/analytics', (req: Request, res: Response) => {
   const collegeBreakdown: Record<UDMCollege, number> = {
-    CBM: 0, CAS: 0, CPPG: 0, CCS: 0, CHS: 0, CED: 0, CCJ: 0
+    CBM: 0, CAS: 0, CPPG: 0, CCS: 0, CHS: 0, CED: 0, CCJ: 0, FACULTY: 0, ADMIN: 0
   };
 
   const courseBreakdown: Record<string, number> = {};

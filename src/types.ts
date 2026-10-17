@@ -3,43 +3,83 @@
  * Based on Universidad de Manila URELIA Office Capstone Specification
  */
 
-export type UDMCollege = 'CBM' | 'CAS' | 'CPPG' | 'CCS' | 'CHS' | 'CED' | 'CCJ';
+export type UDMCollege = 'CBM' | 'CAS' | 'CPPG' | 'CCS' | 'CHS' | 'CED' | 'CCJ' | 'FACULTY' | 'ADMIN';
 
-export const UDM_COLLEGES: { id: UDMCollege; name: string; courses: string[] }[] = [
+export type AuthorCategory = 'Student' | 'Faculty' | 'Administration';
+
+export const UDM_COLLEGES: {
+  id: UDMCollege;
+  name: string;
+  courses: string[];
+  unitType?: 'College' | 'Faculty' | 'Administration';
+  badgeColor?: string;
+  description?: string;
+}[] = [
   {
     id: 'CBM',
     name: 'College of Business Management',
-    courses: ['BS in Business Administration', 'BS in Accountancy', 'BS in Real Estate Management', 'BS in Hospitality Management']
+    courses: ['BS in Business Administration', 'BS in Accountancy', 'BS in Real Estate Management', 'BS in Hospitality Management'],
+    unitType: 'College'
   },
   {
     id: 'CAS',
     name: 'College of Arts and Sciences',
-    courses: ['BS in Psychology', 'BS in Mathematics', 'BA in Communication', 'BS in Social Work']
+    courses: ['BS in Psychology', 'BS in Mathematics', 'BA in Communication', 'BS in Social Work'],
+    unitType: 'College'
   },
   {
     id: 'CPPG',
     name: 'College of Public Policy and Governance',
-    courses: ['BS in Public Administration', 'BA in Political Science']
+    courses: ['BS in Public Administration', 'BA in Political Science'],
+    unitType: 'College'
   },
   {
     id: 'CCS',
     name: 'College of Computer Studies',
-    courses: ['BS in Computer Science', 'BS in Information Technology']
+    courses: ['BS in Computer Science', 'BS in Information Technology'],
+    unitType: 'College'
   },
   {
     id: 'CHS',
     name: 'College of Health Sciences',
-    courses: ['BS in Nursing', 'BS in Physical Therapy']
+    courses: ['BS in Nursing', 'BS in Physical Therapy'],
+    unitType: 'College'
   },
   {
     id: 'CED',
     name: 'College of Education',
-    courses: ['Bachelor of Secondary Education', 'Bachelor of Elementary Education', 'Bachelor of Physical Education']
+    courses: ['Bachelor of Secondary Education', 'Bachelor of Elementary Education', 'Bachelor of Physical Education'],
+    unitType: 'College'
   },
   {
     id: 'CCJ',
     name: 'College of Criminology and Justice',
-    courses: ['BS in Criminology']
+    courses: ['BS in Criminology'],
+    unitType: 'College'
+  },
+  {
+    id: 'FACULTY',
+    name: 'University Faculty & Professorial Research',
+    courses: [
+      'Faculty Pedagogical & Instructional Studies',
+      'Multidisciplinary Faculty Publications',
+      'Professorial Chair Research',
+      'Higher Education Curriculum Innovations'
+    ],
+    unitType: 'Faculty',
+    description: 'Peer-reviewed research and scholarly publications authored by UDM professors & faculty'
+  },
+  {
+    id: 'ADMIN',
+    name: 'University Administration & Institutional Research (URELIA / OVPAA)',
+    courses: [
+      'Institutional Quality Assurance (IQA)',
+      'University Strategic Planning & Governance',
+      'URELIA Research & Extension Studies',
+      'Manila City LGU Policy Collaborations'
+    ],
+    unitType: 'Administration',
+    description: 'University-wide tracer studies, governance frameworks, and municipal policy research'
   }
 ];
 
@@ -52,7 +92,7 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
-  userType?: 'Student' | 'Faculty';
+  userType?: 'Student' | 'Faculty' | 'Administration';
   college?: UDMCollege;
   idNumber?: string;
   courseProgram?: string;
@@ -70,7 +110,7 @@ export interface Research {
   abstract: string;
   authors: string[];
   keywords: string[];
-  department: UDMCollege; // Maps to UDM 7 Colleges
+  department: UDMCollege; // Maps to UDM 7 Colleges + Faculty & Administration
   course: string;
   year: number;
   status: ResearchStatus;
@@ -80,6 +120,7 @@ export interface Research {
   submittedBy: string;
   dateAdded: string;
   relevanceScore?: number;
+  authorCategory?: AuthorCategory;
 }
 
 export interface Submission {
@@ -99,6 +140,7 @@ export interface Submission {
   status: ResearchStatus;
   reviewNote?: string;
   pdfFileName?: string;
+  authorCategory?: AuthorCategory;
 }
 
 export type AccessRequestStatus = 'pending' | 'approved' | 'rejected';
@@ -157,5 +199,6 @@ export interface SearchFilters {
   college: UDMCollege | 'ALL';
   year: number | 'ALL';
   keyword: string | 'ALL';
+  authorCategory?: 'ALL' | 'Student' | 'Faculty' | 'Administration';
   sortBy: 'relevance' | 'newest' | 'views';
 }

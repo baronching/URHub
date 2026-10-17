@@ -169,7 +169,110 @@ export const INITIAL_RESEARCH: Research[] = [
     viewsCount: 310,
     downloadsCount: 112,
     submittedBy: 'USR-UDM-003',
-    dateAdded: '2024-03-01'
+    dateAdded: '2024-03-01',
+    authorCategory: 'Student'
+  },
+  // ==========================================
+  // UNIVERSITY FACULTY RESEARCH (FACULTY)
+  // ==========================================
+  {
+    researchID: 'RES-FAC-2025-001',
+    title: 'Empirical Assessment of Thesis Mentorship Paradigms and Research Self-Efficacy Among Undergraduate Scholars in Universidad de Manila',
+    abstract: 'Undergraduate capstone research represents a pivotal milestone in academic degree completion. This faculty-authored empirical investigation evaluates the direct impact of structured thesis mentorship frameworks, milestone-based literature reviews, and institutional ethics review workshops on student research self-efficacy across 450 UDM students. Quantitative regression analysis reveals that faculty scaffolding during Chapter 1 and Chapter 3 conceptualization reduces research anxiety by 41.8% and accelerates proposal defense readiness. The paper provides undergraduate researchers with verified literature review strategies and defense preparation templates.',
+    authors: ['Dr. Maria Victoria Santos', 'Prof. Ramon Hernandez', 'Dr. Carmelita Reyes'],
+    keywords: ['Thesis Mentorship', 'Research Methodology', 'Undergraduate Research', 'Academic Self-Efficacy', 'Higher Education Pedagogy'],
+    department: 'FACULTY',
+    course: 'Faculty Pedagogical & Instructional Studies',
+    year: 2025,
+    status: 'approved',
+    viewsCount: 520,
+    downloadsCount: 215,
+    submittedBy: 'USR-UDM-002',
+    dateAdded: '2025-02-14',
+    authorCategory: 'Faculty'
+  },
+  {
+    researchID: 'RES-FAC-2026-002',
+    title: 'Aligning Higher Education Capstone Projects with the United Nations Sustainable Development Goals (SDGs): A Faculty Resource Guide and Evaluation Matrix',
+    abstract: 'Academic institutions bear a fundamental responsibility to align student scholarship with pressing societal, economic, and environmental imperatives. This faculty publication presents a standardized curriculum matrix designed for UDM undergraduate and graduate researchers to map thesis outputs directly to UN SDGs—predominantly SDG 4 (Quality Education), SDG 9 (Industry, Innovation & Infrastructure), and SDG 11 (Sustainable Cities). Includes benchmark rubrics, qualitative assessment criteria, and empirical case studies from recent UDM technological and policy innovations.',
+    authors: ['Prof. Vincent Visitacion', 'Dr. Alejandro Reyes', 'Prof. Danilo Cruz'],
+    keywords: ['UN SDGs', 'Capstone Guidelines', 'Sustainable Cities', 'Evaluation Rubrics', 'Curriculum Innovation'],
+    department: 'FACULTY',
+    course: 'Higher Education Curriculum Innovations',
+    year: 2026,
+    status: 'approved',
+    viewsCount: 680,
+    downloadsCount: 310,
+    submittedBy: 'USR-UDM-002',
+    dateAdded: '2026-01-20',
+    authorCategory: 'Faculty'
+  },
+  {
+    researchID: 'RES-FAC-2025-003',
+    title: 'Academic Integrity and Responsible Generative AI Integration in University Research: A Practical Protocol for Students and Mentors',
+    abstract: 'The rapid emergence of Generative Artificial Intelligence (GenAI) and Large Language Models necessitates clear institutional frameworks distinguishing ethical research augmentation from academic malpractice. This multidisciplinary faculty study examines ethical AI utilization protocols, prompt transparency standards, citation methodologies for AI-generated artifacts, and empirical plagiarism detection thresholds. Provides students with clear operational boundaries for using AI in coding, exploratory literature review, and statistical synthesis.',
+    authors: ['Dr. Elena Reyes', 'Prof. Roberto Alcantara', 'Dr. Teresa Morales'],
+    keywords: ['Generative AI', 'Academic Integrity', 'Research Ethics', 'Citation Standards', 'AI Guidelines'],
+    department: 'FACULTY',
+    course: 'Multidisciplinary Faculty Publications',
+    year: 2025,
+    status: 'approved',
+    viewsCount: 890,
+    downloadsCount: 440,
+    submittedBy: 'USR-UDM-002',
+    dateAdded: '2025-04-10',
+    authorCategory: 'Faculty'
+  },
+  // ==========================================
+  // UNIVERSITY ADMINISTRATION & INSTITUTIONAL RESEARCH (ADMIN)
+  // ==========================================
+  {
+    researchID: 'RES-ADM-2025-001',
+    title: 'Universidad de Manila Institutional Tracer Study: Five-Year Longitudinal Analysis of Graduate Employability, Licensure Performance, and Industry Skill Alignment',
+    abstract: 'Conducted by the UDM Administration in coordination with the Office of the Vice President for Academic Affairs (OVPAA) and URELIA, this comprehensive institutional tracer study surveys 3,840 alumni from graduation batches 2020 through 2024 across all degree programs. Highlights include an 88.6% employment rate within six months of graduation, national licensure passing rates exceeding Philippine national averages, and key employer feedback identifying in-demand technical competencies. Offers student researchers invaluable baseline demographic datasets and industry trends for Manila-based studies.',
+    authors: ['Office of the Vice President for Academic Affairs (OVPAA)', 'URELIA Research & Extension Directorate'],
+    keywords: ['Graduate Tracer Study', 'Employability Metrics', 'Institutional Quality Assurance', 'Alumni Outcomes', 'Manila Workforce'],
+    department: 'ADMIN',
+    course: 'Institutional Quality Assurance (IQA)',
+    year: 2025,
+    status: 'approved',
+    viewsCount: 740,
+    downloadsCount: 290,
+    submittedBy: 'USR-UDM-003',
+    dateAdded: '2025-03-01',
+    authorCategory: 'Administration'
+  },
+  {
+    researchID: 'RES-ADM-2026-002',
+    title: 'Smart City Manila Urban Governance and Collaborative University-LGU Research Agenda (2024–2028)',
+    abstract: 'Commissioned by the Universidad de Manila University Administration in official partnership with the City of Manila Mayor\'s Office and the Manila City Planning and Development Office (CPDO), this institutional policy paper delineates the city-university research roadmap. Details municipal priorities in flood mitigation telemetry, smart traffic signaling, digital barangay frontline services, and community health monitoring across Manila\'s six legislative districts. Serves as a vital guide for student researchers seeking research topics with direct City Hall grant funding and practical local deployment avenues.',
+    authors: ['UDM University Administration', 'Manila City Planning & Development Office (CPDO)'],
+    keywords: ['Smart City Manila', 'LGU Research Agenda', 'Urban Governance', 'University-City Partnership', 'Public Administration'],
+    department: 'ADMIN',
+    course: 'Manila City LGU Policy Collaborations',
+    year: 2026,
+    status: 'approved',
+    viewsCount: 920,
+    downloadsCount: 380,
+    submittedBy: 'USR-UDM-003',
+    dateAdded: '2026-02-18',
+    authorCategory: 'Administration'
+  },
+  {
+    researchID: 'RES-ADM-2024-003',
+    title: 'URELIA Institutional Research and Ethics Review Manual: Standardized Protocols for Student Theses and Faculty Publications',
+    abstract: 'The official university administrative protocol manual published by the URELIA Office. Sets forth comprehensive institutional guidelines governing ethics review board (IRB) clearance, informed consent requirements for human subjects in Manila barangays, intellectual property and copyright registration at the Intellectual Property Office of the Philippines (IPOPHL), and digital archiving procedures on the UDM-ResearchHub portal. Essential reading for every student preparing their manuscript submission.',
+    authors: ['URELIA Evaluation Committee', 'University Academic Council'],
+    keywords: ['URELIA Manual', 'Ethics Protocols', 'Intellectual Property', 'IRB Clearance', 'University Research Standards'],
+    department: 'ADMIN',
+    course: 'URELIA Research & Extension Studies',
+    year: 2024,
+    status: 'approved',
+    viewsCount: 1150,
+    downloadsCount: 520,
+    submittedBy: 'USR-UDM-003',
+    dateAdded: '2024-01-15',
+    authorCategory: 'Administration'
   }
 ];
 

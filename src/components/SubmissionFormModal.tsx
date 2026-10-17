@@ -33,6 +33,9 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 }) => {
   const [step, setStep] = useState<number>(1);
   const [title, setTitle] = useState('');
+  const [authorCategory, setAuthorCategory] = useState<'Student' | 'Faculty' | 'Administration'>(
+    currentUser?.userType === 'Faculty' ? 'Faculty' : 'Student'
+  );
   const [department, setDepartment] = useState<UDMCollege>(currentUser?.college || 'CCS');
   const [course, setCourse] = useState(currentUser?.course || UDM_COLLEGES[0].courses[0]);
   const [year, setYear] = useState<number>(new Date().getFullYear());
@@ -200,7 +203,8 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
         year: year || new Date().getFullYear(),
         dateSubmitted: new Date().toISOString().split('T')[0],
         status: 'pending',
-        pdfFileName: pdfFileName || 'research_manuscript.pdf'
+        pdfFileName: pdfFileName || 'research_manuscript.pdf',
+        authorCategory
       };
 
       await createSubmission(newSubmission);
@@ -310,10 +314,47 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
                 />
               </div>
 
+              {/* Research Classification: Student, Faculty, Administration */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Research Classification / Origin *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'Student' as const, label: '🎓 Student Capstone', desc: 'Authored by student researcher(s)' },
+                    { id: 'Faculty' as const, label: '👨‍🏫 Faculty Research', desc: 'Authored by professors & faculty' },
+                    { id: 'Administration' as const, label: '🏛️ Administration Study', desc: 'Institutional or university policy' }
+                  ].map(cls => (
+                    <button
+                      key={cls.id}
+                      type="button"
+                      onClick={() => {
+                        setAuthorCategory(cls.id);
+                        if (cls.id === 'Administration') {
+                          handleDepartmentChange('ADMIN');
+                        } else if (cls.id === 'Faculty' && department === 'ADMIN') {
+                          handleDepartmentChange('FACULTY');
+                        } else if (cls.id === 'Student' && (department === 'FACULTY' || department === 'ADMIN')) {
+                          handleDepartmentChange('CCS');
+                        }
+                      }}
+                      className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                        authorCategory === cls.id
+                          ? 'border-[#1a4731] bg-emerald-50/70 ring-2 ring-[#1a4731]/20'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="block text-xs font-bold text-slate-800">{cls.label}</span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5">{cls.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    UDM College (7 Academic Units) *
+                    UDM Academic or Institutional Unit *
                   </label>
                   <select
                     value={department}

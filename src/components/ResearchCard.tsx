@@ -27,11 +27,19 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
         {/* Header Badges */}
         <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
           <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0">
-            <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[11px] sm:text-xs font-bold bg-[#1a4731] text-white uppercase tracking-wider shrink-0">
-              {research.department}
+            <span
+              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider shrink-0 ${
+                research.department === 'FACULTY' || research.authorCategory === 'Faculty'
+                  ? 'bg-indigo-700 shadow-2xs'
+                  : research.department === 'ADMIN' || research.authorCategory === 'Administration'
+                  ? 'bg-amber-700 shadow-2xs'
+                  : 'bg-[#1a4731]'
+              }`}
+            >
+              {research.department === 'FACULTY' ? '👨‍🏫 FACULTY' : research.department === 'ADMIN' ? '🏛️ ADMIN' : research.department}
             </span>
             <span className="text-[11px] sm:text-xs text-slate-500 font-semibold truncate max-w-[140px] sm:max-w-[200px]" title={collegeInfo?.name}>
-              {collegeInfo?.name.replace('College of ', '') || research.department}
+              {research.department === 'FACULTY' ? 'Faculty Publication' : research.department === 'ADMIN' ? 'Institutional Study' : collegeInfo?.name.replace('College of ', '') || research.department}
             </span>
           </div>
 

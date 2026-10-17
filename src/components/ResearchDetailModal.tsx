@@ -431,11 +431,21 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
         {/* Modal Header - Fixed/Sticky with permanently visible X close button */}
         <div className="shrink-0 bg-slate-50 px-3.5 sm:px-6 py-2.5 sm:py-3.5 border-b border-slate-200 flex items-center justify-between gap-2.5 sm:gap-4 sticky top-0 z-20 select-none">
           <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0 flex-1">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#1a4731] text-white flex items-center justify-center font-bold text-[11px] sm:text-xs uppercase shrink-0 shadow-xs">
-              {research.department}
+            <div
+              className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg text-white flex items-center justify-center font-bold text-[10px] sm:text-xs uppercase shrink-0 shadow-xs ${
+                research.department === 'FACULTY' || research.authorCategory === 'Faculty'
+                  ? 'bg-indigo-700'
+                  : research.department === 'ADMIN' || research.authorCategory === 'Administration'
+                  ? 'bg-amber-700'
+                  : 'bg-[#1a4731]'
+              }`}
+            >
+              {research.department === 'FACULTY' ? 'FAC' : research.department === 'ADMIN' ? 'ADM' : research.department}
             </div>
             <div className="min-w-0 flex-1">
-              <span className="text-[10px] sm:text-xs font-bold text-[#1a4731] uppercase tracking-wider block truncate">
+              <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider block truncate ${
+                research.department === 'FACULTY' ? 'text-indigo-800' : research.department === 'ADMIN' ? 'text-amber-800' : 'text-[#1a4731]'
+              }`}>
                 {collegeInfo?.name || research.department}
               </span>
               <h2 
@@ -653,9 +663,17 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
 
                 {/* Key metadata chips */}
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-slate-600">
-                  <span className="flex items-center space-x-1 font-bold text-[#1a4731] bg-slate-100 px-2 py-0.5 rounded-md">
+                  <span className={`flex items-center space-x-1 font-bold px-2 py-0.5 rounded-md ${
+                    research.department === 'FACULTY' || research.authorCategory === 'Faculty'
+                      ? 'bg-indigo-50 text-indigo-950 border border-indigo-200'
+                      : research.department === 'ADMIN' || research.authorCategory === 'Administration'
+                      ? 'bg-amber-50 text-amber-950 border border-amber-200'
+                      : 'bg-slate-100 text-[#1a4731]'
+                  }`}>
                     <Building2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>{research.department} • {research.course}</span>
+                    <span>
+                      {research.department === 'FACULTY' ? '👨‍🏫 Faculty Publication' : research.department === 'ADMIN' ? '🏛️ Institutional Study' : research.department} • {research.course}
+                    </span>
                   </span>
                   <span className="flex items-center space-x-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
                     <Calendar className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />

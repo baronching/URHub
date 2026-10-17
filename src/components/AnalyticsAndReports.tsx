@@ -194,7 +194,7 @@ export const AnalyticsAndReports: React.FC<AnalyticsAndReportsProps> = ({ analyt
         <div className="flex justify-between items-center">
           <h3 className="text-sm font-bold text-[#1a4731] flex items-center space-x-2">
             <Building2 className="w-4 h-4 text-[#1a4731]" />
-            <span>Research Output by UDM College (7 Academic Colleges)</span>
+            <span>Research Output by UDM Units (Colleges, Faculty & Administration)</span>
           </h3>
           <span className="text-xs text-[#1a4731] font-bold">Real-time DB Counts</span>
         </div>
