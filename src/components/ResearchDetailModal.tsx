@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Research, User, AccessRequest, UDM_COLLEGES } from '../types';
 import { generateContextualAcademicAnswer } from '../utils/researchAiAssistant';
+import { ManuscriptReader } from './ManuscriptReader';
 import jsPDF from 'jspdf';
 import {
   X,
@@ -53,8 +54,6 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   onOpenAuthModal
 }) => {
   const [activeTab, setActiveTab] = useState<'abstract' | 'ai_assistant' | 'view_only_reader'>('abstract');
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const totalViewerPages = 14; // Simulated view-only manuscript pages
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
 
   // Gemini AI Assistant State
@@ -487,17 +486,9 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              {hasFullAccess ? (
-                <BookOpen className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
-              ) : (
-                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              )}
+              <BookOpen className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
               <span className="truncate">Full Paper</span>
-              {hasFullAccess ? (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">Available</span>
-              ) : (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-700 font-bold shrink-0">Sign In</span>
-              )}
+              <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">14 Pages</span>
             </button>
           </div>
 
@@ -522,67 +513,31 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
           {activeTab === 'abstract' ? (
             /* ABSTRACT & METADATA VIEW */
             <div className="space-y-4 sm:space-y-6">
-              {/* Access Banner & Action: Sign in to unlock full research */}
-              {!currentUser ? (
-                <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs">
-                  <div className="flex items-start space-x-3 text-xs">
-                    <div className="p-2 rounded-lg bg-slate-200 text-slate-700 shrink-0">
-                      <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-700" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm mb-0.5">Full Research Access</h4>
-                      <p className="text-slate-600 leading-normal">
-                        Abstract and metadata are publicly accessible. Sign in with your official UDM account to view the full research manuscript.
-                      </p>
-                    </div>
+              {/* Full Research View-Only Notice & Direct Access Action Card */}
+              <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
+                <div className="flex items-center space-x-2.5 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
+                    <BookOpen className="w-4 h-4 text-emerald-700" />
                   </div>
-                  {onOpenAuthModal && (
-                    <button
-                      onClick={onOpenAuthModal}
-                      className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shrink-0 shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer"
-                    >
-                      <KeyRound className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c9a84c] shrink-0" />
-                      <span>Sign In to Read Full Research</span>
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
-                  <div className="flex items-center space-x-2.5 min-w-0">
-                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
-                      <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-emerald-900 text-xs sm:text-sm truncate">
-                        Full Research Manuscript Available
-                      </p>
-                      <p className="text-emerald-700 text-[11px] truncate">
-                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email})
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => setActiveTab('view_only_reader')}
-                      className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
-                    >
-                      <BookOpen className="w-4 h-4 text-[#c9a84c] shrink-0" />
-                      <span>Read Full Research</span>
-                    </button>
-                    {research.fullPdfUrl && (
-                      <a
-                        href={research.fullPdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold bg-white text-[#1a4731] border border-[#1a4731]/40 hover:bg-emerald-50/50 shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer transition-all"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />
-                        <span>Source PDF</span>
-                      </a>
-                    )}
+                  <div className="min-w-0">
+                    <p className="font-bold text-emerald-900 text-xs sm:text-sm truncate">
+                      Full Research Manuscript (Viewable on Website)
+                    </p>
+                    <p className="text-emerald-700 text-[11px] truncate">
+                      Official URELIA Policy: Complete 14-page research is viewable online; only the abstract is downloadable.
+                    </p>
                   </div>
                 </div>
-              )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setActiveTab('view_only_reader')}
+                    className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
+                  >
+                    <BookOpen className="w-4 h-4 text-[#c9a84c]" />
+                    <span>Read Full Research (14 Pages)</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Main Title - Responsive scaling */}
               <div className="space-y-2 sm:space-y-3">
@@ -972,154 +927,11 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
               </div>
             </div>
           ) : (
-            /* VIEW-ONLY FULL DOCUMENT READER MODE */
-            !hasFullAccess ? (
-              <div className="p-6 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl space-y-4">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-xs">
-                  <Lock className="w-6 h-6 sm:w-7 sm:h-7 text-amber-700" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Sign In to Read Full Research</h3>
-                  <p className="text-xs text-slate-600 max-w-md mx-auto leading-normal">
-                    Abstract and metadata are publicly accessible. To read the complete research manuscript in protected view-only mode, please sign in with your official UDM account.
-                  </p>
-                </div>
-
-                <div className="pt-2">
-                  {onOpenAuthModal && (
-                    <button
-                      onClick={onOpenAuthModal}
-                      className="px-5 py-2.5 sm:px-6 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
-                    >
-                      <KeyRound className="w-4 h-4 text-[#c9a84c]" />
-                      <span>Sign In to Read Full Research</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 select-none" onContextMenu={(e) => e.preventDefault()}>
-                {/* Protection Notice */}
-                <div className="bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-200 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-1 text-xs">
-                  <div className="flex items-center space-x-1.5 sm:space-x-2 text-[#1a4731] font-bold">
-                    <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1a4731] shrink-0" />
-                    <span>Full Manuscript Viewer • Protected View-Only Mode</span>
-                  </div>
-                  <span className="text-slate-500 font-mono text-[10px] sm:text-[11px]">
-                    Copying & Downloading Restricted
-                  </span>
-                </div>
-
-                {/* Google Drive Manuscript Direct Link */}
-                {research.fullPdfUrl && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-emerald-950">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Original manuscript archived in official UDM Google Drive collection.</span>
-                    </div>
-                    <a
-                      href={research.fullPdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#1a4731] hover:bg-[#123323] text-white rounded-lg font-bold transition-colors shrink-0 shadow-xs"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 text-[#c9a84c]" />
-                      <span>Open in Google Drive</span>
-                    </a>
-                  </div>
-                )}
-
-                {/* View-Only Canvas Reader Paper Container */}
-                <div className="bg-white text-slate-900 rounded-xl p-4 sm:p-8 md:p-12 shadow-md relative min-h-[400px] sm:min-h-[500px] border border-slate-200 font-serif leading-relaxed space-y-4 sm:space-y-6 overflow-hidden">
-                  
-                  {/* Diagonal Watermark Overlay */}
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.05] rotate-[-30deg] text-center select-none">
-                    <span className="text-3xl sm:text-5xl md:text-6xl font-black uppercase text-slate-900 tracking-widest leading-normal">
-                      FOR VIEWING ONLY<br />UNIVERSIDAD DE MANILA<br />URELIA OFFICE
-                    </span>
-                  </div>
-
-                  {/* Page Document Header */}
-                  <div className="border-b-2 border-slate-200 pb-3 sm:pb-4 flex justify-between items-end font-sans">
-                    <div className="min-w-0 flex-1 pr-2">
-                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#1a4731] block">
-                        UNIVERSIDAD DE MANILA • {research.department}
-                      </span>
-                      <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-slate-900 font-sans mt-1 break-words leading-snug">
-                        {research.title}
-                      </h3>
-                    </div>
-                    <span className="text-[10px] sm:text-xs text-slate-500 font-mono shrink-0">
-                      Page {currentPage} of {totalViewerPages}
-                    </span>
-                  </div>
-
-                  {/* Page Document Content */}
-                  <div className="space-y-3 sm:space-y-4 text-xs sm:text-sm text-slate-800 text-left sm:text-justify break-words">
-                    <p className="font-bold font-sans text-slate-900 text-xs sm:text-sm">
-                      Chapter {currentPage}: {currentPage === 1 ? 'Introduction & Background of the Study' : currentPage === 2 ? 'Review of Related Literature' : currentPage === 3 ? 'Research Methodology & ML Architecture' : `Results and Analysis Section ${currentPage}`}
-                    </p>
-
-                    <p className="leading-relaxed">
-                      {research.abstract}
-                    </p>
-
-                    <p className="leading-relaxed">
-                      The empirical evaluation conducted at the Universidad de Manila across the seven academic colleges (CBM, CAS, CPPG, CCS, CHS, CED, CCJ) demonstrated statistically significant outcomes. Quantitative data collected from student cohorts, faculty researchers, and institutional records underwent rigorous verification.
-                    </p>
-
-                    <div className="my-4 sm:my-6 p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200 font-sans text-xs space-y-2">
-                      <span className="font-bold text-slate-900 block text-[11px] sm:text-xs">
-                        Table {currentPage}.1: Analytical Metric Data Matrix (UDM URELIA Archives)
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[10px] sm:text-[11px] text-slate-700">
-                        <div className="p-2 bg-white rounded border border-slate-200">Dataset Sample: N=350</div>
-                        <div className="p-2 bg-white rounded border border-slate-200">Confidence Interval: 95%</div>
-                        <div className="p-2 bg-white rounded border border-slate-200">p-Value: &lt; 0.01</div>
-                      </div>
-                    </div>
-
-                    <p className="leading-relaxed">
-                      Further algorithmic validation confirms that integrating machine learning classification and vector space models enhances archival retrieval precision. The URELIA Office emphasizes that future research iterations must maintain adherence to university institutional review guidelines.
-                    </p>
-                  </div>
-
-                  {/* Page Footer */}
-                  <div className="pt-4 sm:pt-8 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-1 text-[9px] sm:text-[10px] text-slate-500 font-sans">
-                    <span>UDM-ResearchHub Official Viewer</span>
-                    <span className="text-center">CONFIDENTIAL - PROPERTY OF UNIVERSIDAD DE MANILA</span>
-                    <span>Page {currentPage}</span>
-                  </div>
-                </div>
-
-                {/* Reader Page Navigation Controls */}
-                <div className="flex items-center justify-between bg-slate-50 p-3 sm:p-4 rounded-lg border border-slate-200 gap-2">
-                  <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 text-xs font-bold text-slate-700 flex items-center space-x-1 cursor-pointer"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Previous Page</span>
-                    <span className="sm:hidden">Prev</span>
-                  </button>
-
-                  <span className="text-xs font-bold text-[#1a4731]">
-                    Page <strong>{currentPage}</strong> of {totalViewerPages}
-                  </span>
-
-                  <button
-                    disabled={currentPage === totalViewerPages}
-                    onClick={() => setCurrentPage(p => Math.min(totalViewerPages, p + 1))}
-                    className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-[#1a4731] hover:bg-[#123323] disabled:opacity-40 text-xs font-bold text-white flex items-center space-x-1 cursor-pointer"
-                  >
-                    <span className="hidden sm:inline">Next Page</span>
-                    <span className="sm:hidden">Next</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )
+            /* VIEW-ONLY FULL DOCUMENT READER MODE - DYNAMIC 14-PAGE MANUSCRIPT */
+            <ManuscriptReader
+              research={research}
+              onDownloadAbstract={handleDownloadAbstractPdf}
+            />
           )}
         </div>
       </div>
