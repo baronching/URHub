@@ -294,9 +294,14 @@ export default function App() {
     }
   };
 
-  // Handle Abstract Download -> Increment Download
+  // Handle Abstract Download -> Increment Download (Requires Login)
   const handleDownloadAbstract = (paper: Research, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!currentUser) {
+      triggerToast('Please sign in with your UDM account to download the research abstract.', 'info');
+      setShowAuthModal(true);
+      return;
+    }
     setSelectedResearch(paper);
     recordResearchDownload(paper.researchID);
   };

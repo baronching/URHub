@@ -284,6 +284,10 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
 
   // Download Abstract as PDF using jsPDF
   const handleDownloadAbstractPdf = () => {
+    if (!currentUser) {
+      if (onOpenAuthModal) onOpenAuthModal();
+      return;
+    }
     try {
       const doc = new jsPDF({
         orientation: 'portrait',
@@ -463,7 +467,9 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
             <button
               onClick={() => {
                 setActiveTab('ai_assistant');
-                if (!aiSummary && !aiLoading) {
+                if (!currentUser) {
+                  if (onOpenAuthModal) onOpenAuthModal();
+                } else if (!aiSummary && !aiLoading) {
                   fetchAiSummary();
                 }
               }}
@@ -473,22 +479,43 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   : 'bg-[#c9a84c]/15 text-[#1a4731] hover:bg-[#c9a84c]/25 border border-[#c9a84c]/30'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
+              {currentUser ? (
+                <Sparkles className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-[#1a4731]/70 shrink-0" />
+              )}
               <span className="truncate">AI Assistant</span>
-              <span className="hidden xs:inline-block px-1 py-0.2 rounded text-[9px] bg-[#c9a84c] text-[#1a4731] font-extrabold shrink-0">AI</span>
+              {currentUser ? (
+                <span className="hidden xs:inline-block px-1 py-0.2 rounded text-[9px] bg-[#c9a84c] text-[#1a4731] font-extrabold shrink-0">AI</span>
+              ) : (
+                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-[#1a4731]/10 text-[#1a4731] font-bold shrink-0">Sign In</span>
+              )}
             </button>
 
             <button
-              onClick={() => setActiveTab('view_only_reader')}
+              onClick={() => {
+                setActiveTab('view_only_reader');
+                if (!currentUser && onOpenAuthModal) {
+                  onOpenAuthModal();
+                }
+              }}
               className={`px-2 sm:px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center space-x-1 sm:space-x-1.5 transition-all cursor-pointer ${
                 activeTab === 'view_only_reader'
                   ? 'bg-[#1a4731] text-white shadow-sm'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
+              {currentUser ? (
+                <BookOpen className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              )}
               <span className="truncate">Full Paper</span>
-              <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">14 Pages</span>
+              {currentUser ? (
+                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">14 Pages</span>
+              ) : (
+                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-700 font-bold shrink-0">Sign In</span>
+              )}
             </button>
           </div>
 
@@ -496,8 +523,12 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
             onClick={handleDownloadAbstractPdf}
             className="w-full sm:w-auto px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-1.5 sm:space-x-2 transition-all shrink-0 cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c9a84c] shrink-0" />
-            <span>Download Abstract PDF</span>
+            {currentUser ? (
+              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c9a84c] shrink-0" />
+            ) : (
+              <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#c9a84c] shrink-0" />
+            )}
+            <span>{currentUser ? 'Download Abstract PDF' : 'Sign In to Download Abstract'}</span>
           </button>
         </div>
 
@@ -513,31 +544,68 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
           {activeTab === 'abstract' ? (
             /* ABSTRACT & METADATA VIEW */
             <div className="space-y-4 sm:space-y-6">
-              {/* Full Research View-Only Notice & Direct Access Action Card */}
-              <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
-                <div className="flex items-center space-x-2.5 min-w-0">
-                  <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
-                    <BookOpen className="w-4 h-4 text-emerald-700" />
+              {/* Login Requirement Banner or Direct Access Card */}
+              {!currentUser ? (
+                <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50/90 via-slate-50 to-emerald-50/50 border border-amber-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+                  <div className="flex items-start space-x-3 min-w-0">
+                    <div className="p-2 rounded-lg bg-amber-100 text-amber-800 shrink-0 border border-amber-200">
+                      <Lock className="w-5 h-5 text-amber-700" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm mb-0.5">
+                        Sign In Required for Full Paper, AI Assistant & Abstract Download
+                      </h4>
+                      <p className="text-slate-600 leading-normal">
+                        Abstract and metadata are publicly readable. Log in with your official UDM account to read the full 14-page manuscript, chat with the AI assistant, or download the abstract PDF.
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-emerald-900 text-xs sm:text-sm truncate">
-                      Full Research Manuscript (Viewable on Website)
-                    </p>
-                    <p className="text-emerald-700 text-[11px] truncate">
-                      Official URELIA Policy: Complete 14-page research is viewable online; only the abstract is downloadable.
-                    </p>
+                  {onOpenAuthModal && (
+                    <button
+                      onClick={onOpenAuthModal}
+                      className="self-start sm:self-center px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer shrink-0 transition-all active:scale-98"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-[#c9a84c]" />
+                      <span>Sign In with UDM Account</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
+                      <BookOpen className="w-4 h-4 text-emerald-700" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-emerald-900 text-xs sm:text-sm truncate">
+                        Full Research Manuscript Available
+                      </p>
+                      <p className="text-emerald-700 text-[11px] truncate">
+                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email}) • 14 Pages viewable online
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setActiveTab('view_only_reader')}
+                      className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
+                    >
+                      <BookOpen className="w-4 h-4 text-[#c9a84c]" />
+                      <span>Read Full Research (14 Pages)</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveTab('ai_assistant');
+                        if (!aiSummary && !aiLoading) fetchAiSummary();
+                      }}
+                      className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold bg-white text-[#1a4731] border border-[#1a4731]/40 hover:bg-emerald-50/50 shadow-2xs flex items-center justify-center space-x-1.5 cursor-pointer transition-all"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-[#c9a84c]" />
+                      <span>AI Assistant</span>
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => setActiveTab('view_only_reader')}
-                    className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
-                  >
-                    <BookOpen className="w-4 h-4 text-[#c9a84c]" />
-                    <span>Read Full Research (14 Pages)</span>
-                  </button>
-                </div>
-              </div>
+              )}
 
               {/* Main Title - Responsive scaling */}
               <div className="space-y-2 sm:space-y-3">
@@ -655,7 +723,29 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
               )}
             </div>
           ) : activeTab === 'ai_assistant' ? (
-            /* AI ASSISTANT & CHAT MODE (GEMINI 3.8 FLASH) */
+            /* AI ASSISTANT & CHAT MODE (GEMINI 3.8 FLASH) - REQUIRES LOGIN */
+            !currentUser ? (
+              <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-2">
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
+                  <Sparkles className="w-7 h-7 text-amber-700" />
+                </div>
+                <div className="space-y-1.5 max-w-md mx-auto">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Sign In to Access AI Research Assistant</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Gemini AI Research Intelligence and Q&A features are reserved for authenticated Universidad de Manila students, faculty, and administrative accounts. Please sign in to analyze this paper.
+                  </p>
+                </div>
+                {onOpenAuthModal && (
+                  <button
+                    onClick={onOpenAuthModal}
+                    className="px-5 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
+                  >
+                    <KeyRound className="w-4 h-4 text-[#c9a84c]" />
+                    <span>Sign In with UDM Account</span>
+                  </button>
+                )}
+              </div>
+            ) : (
             <div className="space-y-6">
               {/* Gemini Header Card */}
               <div className="bg-gradient-to-r from-[#1a4731] to-[#123323] text-white p-4 sm:p-5 rounded-xl border border-[#c9a84c]/40 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -926,12 +1016,36 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                 </form>
               </div>
             </div>
+            )
           ) : (
-            /* VIEW-ONLY FULL DOCUMENT READER MODE - DYNAMIC 14-PAGE MANUSCRIPT */
-            <ManuscriptReader
-              research={research}
-              onDownloadAbstract={handleDownloadAbstractPdf}
-            />
+            /* VIEW-ONLY FULL DOCUMENT READER MODE - REQUIRES LOGIN */
+            !currentUser ? (
+              <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-2">
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
+                  <Lock className="w-7 h-7 text-amber-700" />
+                </div>
+                <div className="space-y-1.5 max-w-md mx-auto">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Sign In to Read Full Research</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    The complete 14-page research manuscript is viewable in protected mode by authenticated Universidad de Manila students, faculty, and administration accounts. Please sign in to read the full paper.
+                  </p>
+                </div>
+                {onOpenAuthModal && (
+                  <button
+                    onClick={onOpenAuthModal}
+                    className="px-5 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
+                  >
+                    <KeyRound className="w-4 h-4 text-[#c9a84c]" />
+                    <span>Sign In to Read Full Paper</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <ManuscriptReader
+                research={research}
+                onDownloadAbstract={handleDownloadAbstractPdf}
+              />
+            )
           )}
         </div>
       </div>
