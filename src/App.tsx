@@ -61,7 +61,7 @@ export default function App() {
     return !localStorage.getItem('udm_privacy_consent_accepted');
   });
   const [isReviewingPrivacy, setIsReviewingPrivacy] = useState(false);
-  const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const [filters, setFilters] = useState<SearchFilters>({
     query: '',
@@ -79,7 +79,7 @@ export default function App() {
   }, [currentUser, activeTab]);
 
   // Show Toast
-  const triggerToast = (text: string, type: 'success' | 'error' = 'success') => {
+  const triggerToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMsg({ text, type });
     setTimeout(() => setToastMsg(null), 4000);
   };
@@ -420,11 +420,15 @@ export default function App() {
             className={`p-4 rounded-xl shadow-xl border flex items-center space-x-3 text-xs font-bold ${
               toastMsg.type === 'success'
                 ? 'bg-[#1a4731] border-[#c9a84c] text-white'
+                : toastMsg.type === 'info'
+                ? 'bg-[#1a4731] border-emerald-400 text-white'
                 : 'bg-white border-rose-500 text-rose-800'
             }`}
           >
             {toastMsg.type === 'success' ? (
               <CheckCircle2 className="w-5 h-5 text-[#c9a84c]" />
+            ) : toastMsg.type === 'info' ? (
+              <BookOpen className="w-5 h-5 text-emerald-400" />
             ) : (
               <AlertCircle className="w-5 h-5 text-rose-600" />
             )}

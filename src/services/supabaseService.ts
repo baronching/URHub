@@ -584,7 +584,7 @@ export interface RegisterPayload {
   email: string;
   password?: string;
   confirmPassword?: string;
-  role: 'Student' | 'Faculty';
+  role: 'Student' | 'Faculty_Admin';
   college: UDMCollege;
   idNumber: string;
   courseProgram: string;

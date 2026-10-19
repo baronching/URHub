@@ -4,7 +4,8 @@
 
 import { UserRole } from '../types';
 
-export function getUserRoleDisplayLabel(role?: UserRole | string): string {
+export function getUserRoleDisplayLabel(roleOrUser?: UserRole | string | { role?: UserRole | string }): string {
+  const role = typeof roleOrUser === 'object' && roleOrUser !== null ? roleOrUser.role : roleOrUser;
   switch (role) {
     case 'super_admin':
       return 'Super Admin (URELIA)';

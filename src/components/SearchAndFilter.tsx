@@ -23,7 +23,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     onChangeFilters({ ...filters, college });
   };
 
-  const handleAuthorCategorySelect = (authorCategory: 'ALL' | 'Student' | 'Faculty' | 'Administration') => {
+  const handleAuthorCategorySelect = (authorCategory: 'ALL' | 'Student' | 'Faculty_Admin') => {
     onChangeFilters({ ...filters, authorCategory });
   };
 

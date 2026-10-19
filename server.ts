@@ -3,6 +3,9 @@
  * Universidad de Manila - URELIA Office
  */
 
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
+
 import express, { Request, Response } from 'express';
 import http from 'http';
 import path from 'path';
