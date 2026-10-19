@@ -1,25 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { User, UDMCollege, UDM_COLLEGES } from '../types';
-import { INITIAL_USERS } from '../data/mockDatabase';
 import {
   registerUserWithSupabase,
-  loginUserWithSupabase,
-  subscribeToUsers
+  loginUserWithSupabase
 } from '../services/supabaseService';
 import {
   X,
   ShieldCheck,
   AlertCircle,
-  Sparkles,
   UserCheck,
   Lock,
   Mail,
   GraduationCap,
   Briefcase,
   IdCard,
-  BookOpen,
-  Database,
-  ArrowRight
+  BookOpen
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -29,7 +24,6 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
   const [isRegister, setIsRegister] = useState(false);
-  const [supabaseAccounts, setSupabaseAccounts] = useState<User[]>([]);
 
   // Lock background scroll
   useEffect(() => {
@@ -54,16 +48,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
     };
   }, [onClose]);
 
-  // Subscribe to live Supabase database accounts
-  useEffect(() => {
-    const unsubscribe = subscribeToUsers((users) => {
-      if (users && users.length > 0) {
-        setSupabaseAccounts(users);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
   // Form State
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -77,16 +61,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Quick 1-Click Login for Accounts in Database
-  const handleQuickAccountLogin = (targetUser: User) => {
-    setErrorMsg('');
-    try {
-      localStorage.setItem('udm_active_user', JSON.stringify(targetUser));
-    } catch {}
-    onLoginSuccess(targetUser);
-    onClose();
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,52 +197,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
             </div>
           )}
 
-          {/* Supabase Database Accounts Quick Access */}
-          {!isRegister && supabaseAccounts.length > 0 && (
-            <div className="p-3.5 bg-gradient-to-br from-emerald-50/80 to-slate-50 rounded-xl border border-emerald-200/90 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#1a4731] uppercase tracking-wider flex items-center space-x-1.5">
-                  <Database className="w-3.5 h-3.5 text-[#c9a84c]" />
-                  <span>Accounts in Your Supabase Database:</span>
-                </span>
-                <span className="text-[9px] bg-emerald-200/70 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
-                  1-Click Instant Login
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs max-h-48 overflow-y-auto pr-1">
-                {supabaseAccounts.map(account => (
-                  <button
-                    key={account.userID}
-                    type="button"
-                    onClick={() => handleQuickAccountLogin(account)}
-                    className="p-2.5 bg-white border border-emerald-200/80 hover:border-[#1a4731] hover:bg-emerald-50/60 rounded-xl text-left transition-all cursor-pointer shadow-2xs group flex flex-col justify-between"
-                  >
-                    <div className="flex items-center justify-between w-full gap-1 mb-1">
-                      <span className="font-bold text-slate-900 group-hover:text-[#1a4731] truncate text-xs">
-                        {account.name}
-                      </span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
-                        account.role === 'super_admin'
-                          ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                          : account.role === 'admin'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                      }`}>
-                        {account.role === 'super_admin' ? 'Super Admin' : account.role === 'admin' ? 'Admin' : (account.userType || 'Student')}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate flex items-center justify-between w-full">
-                      <span className="truncate">{account.email}</span>
-                      {account.idNumber && (
-                        <span className="font-mono text-[#1a4731] font-bold shrink-0 ml-1">ID: {account.idNumber}</span>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
