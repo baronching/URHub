@@ -444,26 +444,60 @@ app.get('/api/analytics', (req: Request, res: Response) => {
 });
 
 // Super Admin User Management
-app.get('/api/admin/users', (req: Request, res: Response) => {
+app.get('/api/admin/users', async (req: Request, res: Response) => {
+  if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+      const { data, error } = await supabase.from('users').select('*');
+      if (!error && data && data.length > 0) {
+        const mapped = data.map(u => ({
+          userID: u.id,
+          name: u.name || u.full_name,
+          fullName: u.full_name || u.name,
+          email: u.email,
+          role: u.role,
+          userType: u.user_type,
+          college: u.college,
+          idNumber: u.id_number,
+          courseProgram: u.course_program,
+          readingHistory: u.reading_history || []
+        }));
+        return res.json(mapped);
+      }
+    } catch (err) {
+      console.warn('Could not query Supabase users in API:', err);
+    }
+  }
   const safeUsers = usersDB.map(({ password: _, ...user }) => user);
   res.json(safeUsers);
 });
 
-app.put('/api/admin/users/:id', (req: Request, res: Response) => {
+app.put('/api/admin/users/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const { role, college, course } = req.body;
 
-  const user = usersDB.find(u => u.userID === id);
-  if (!user) {
-    return res.status(404).json({ error: 'User not found.' });
+  if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+      const updates: any = {};
+      if (role) updates.role = role;
+      if (college) updates.college = college;
+      if (course) updates.course_program = course;
+      await supabase.from('users').update(updates).eq('id', id);
+    } catch (err) {
+      console.warn('Could not update user in Supabase:', err);
+    }
   }
 
-  if (role) user.role = role;
-  if (college) user.college = college;
-  if (course) user.course = course;
-
-  const { password: _, ...safeUser } = user;
-  res.json({ message: 'User role updated successfully.', user: safeUser });
+  const user = usersDB.find(u => u.userID === id);
+  if (user) {
+    if (role) user.role = role;
+    if (college) user.college = college;
+    if (course) user.course = course;
+  }
+  res.json({ message: 'User role updated successfully.' });
 });
 
 // System Settings Management

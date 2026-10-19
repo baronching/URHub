@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, SystemSettings, UDMCollege, UDM_COLLEGES } from '../types';
 import { INITIAL_USERS, INITIAL_SYSTEM_SETTINGS } from '../data/mockDatabase';
 import { getUserRoleDisplayLabel } from '../utils/userUtils';
+import { subscribeToUsers, updateUserRole } from '../services/supabaseService';
 import { Settings, Users, Shield, Save, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const SuperAdminManagement: React.FC = () => {
@@ -13,26 +14,14 @@ export const SuperAdminManagement: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [uRes, sRes] = await Promise.all([
-        fetch('/api/admin/users').catch(() => null),
-        fetch('/api/admin/settings').catch(() => null)
-      ]);
-
-      let uData = INITIAL_USERS;
+      const sRes = await fetch('/api/admin/settings').catch(() => null);
       let sData = INITIAL_SYSTEM_SETTINGS;
-
-      if (uRes && uRes.ok && (uRes.headers.get('content-type') || '').includes('application/json')) {
-        uData = await uRes.json();
-      }
       if (sRes && sRes.ok && (sRes.headers.get('content-type') || '').includes('application/json')) {
         sData = await sRes.json();
       }
-
-      setUsers(uData);
       setSettings(sData);
     } catch (err) {
-      console.warn('Using local fallback for settings/users:', err);
-      setUsers(INITIAL_USERS);
+      console.warn('Using local fallback for settings:', err);
       setSettings(INITIAL_SYSTEM_SETTINGS);
     } finally {
       setIsLoading(false);
@@ -41,20 +30,30 @@ export const SuperAdminManagement: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    // Real-time synchronization with Supabase users table
+    const unsubscribe = subscribeToUsers((liveUsers) => {
+      if (liveUsers && liveUsers.length > 0) {
+        setUsers(liveUsers);
+        setIsLoading(false);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleRoleUpdate = async (userID: string, role: UserRole) => {
     try {
-      const res = await fetch(`/api/admin/users/${userID}`, {
+      // 1. Direct real-time Supabase update
+      await updateUserRole(userID, role);
+
+      // 2. Also notify backend API
+      fetch(`/api/admin/users/${userID}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role })
-      });
-      if (res.ok) {
-        setMsg('User role updated successfully.');
-        loadData();
-        setTimeout(() => setMsg(''), 3000);
-      }
+      }).catch(() => null);
+
+      setMsg('User role updated successfully in Supabase.');
+      setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
     }

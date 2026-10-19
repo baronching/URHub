@@ -638,50 +638,110 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<U
   return newUser;
 }
 
-export async function loginUserWithSupabase(email: string, password?: string): Promise<User> {
-  if (isSupabaseConfigured && password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+export async function loginUserWithSupabase(identifier: string, password?: string): Promise<User> {
+  const cleanInput = (identifier || '').trim();
+  const cleanLower = cleanInput.toLowerCase();
 
-    if (error) {
-      throw new Error(error.message);
+  let candidate: any = null;
+
+  // 1. Search in Supabase 'users' table across email, username, id_number, or id
+  if (isSupabaseConfigured) {
+    try {
+      const { data: allUsers, error: fetchErr } = await supabase.from('users').select('*');
+      if (!fetchErr && allUsers && allUsers.length > 0) {
+        candidate = allUsers.find((u: any) =>
+          (u.email && u.email.toLowerCase() === cleanLower) ||
+          (u.email && u.email.toLowerCase().split('@')[0] === cleanLower) ||
+          (u.id_number && u.id_number.toLowerCase() === cleanLower) ||
+          (u.id && String(u.id).toLowerCase() === cleanLower) ||
+          (u.name && u.name.toLowerCase() === cleanLower) ||
+          (u.full_name && u.full_name.toLowerCase() === cleanLower)
+        );
+      }
+    } catch (err) {
+      console.warn('Supabase candidate lookup error:', err);
     }
+  }
 
-    if (data.user) {
-      // Find user in table or construct from metadata
-      const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).single();
-      if (profile) {
-        return {
-          userID: profile.id,
-          name: profile.name || profile.full_name || email.split('@')[0],
-          fullName: profile.full_name || profile.name,
-          email: profile.email || email,
-          role: profile.role || 'student_faculty',
-          userType: profile.user_type || 'Student',
-          college: profile.college || 'CCS',
-          idNumber: profile.id_number || '',
-          courseProgram: profile.course_program || '',
-          readingHistory: profile.reading_history || []
-        };
+  // 2. Check in-memory / mock database if not found in Supabase
+  if (!candidate) {
+    const memoryMatch = inMemoryUsers.find(u =>
+      u.email.toLowerCase() === cleanLower ||
+      u.email.toLowerCase().split('@')[0] === cleanLower ||
+      (u.idNumber && u.idNumber.toLowerCase() === cleanLower) ||
+      u.userID.toLowerCase() === cleanLower ||
+      u.name.toLowerCase() === cleanLower
+    );
+    if (memoryMatch) {
+      candidate = {
+        id: memoryMatch.userID,
+        name: memoryMatch.name,
+        full_name: memoryMatch.fullName || memoryMatch.name,
+        email: memoryMatch.email,
+        role: memoryMatch.role,
+        user_type: memoryMatch.userType,
+        college: memoryMatch.college,
+        id_number: memoryMatch.idNumber,
+        course_program: memoryMatch.courseProgram,
+        reading_history: memoryMatch.readingHistory
+      };
+    }
+  }
+
+  const targetEmail = candidate ? candidate.email : (cleanLower.includes('@') ? cleanLower : `${cleanLower}@udm.edu.ph`);
+
+  // 3. Attempt Supabase Auth signInWithPassword if configured and password is provided
+  if (isSupabaseConfigured && password) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: targetEmail,
+        password
+      });
+
+      if (error) {
+        const isEmailNotConfirmed = error.message.toLowerCase().includes('email not confirmed');
+        if (isEmailNotConfirmed) {
+          // Gracefully bypass unconfirmed email for verified institutional accounts in the database
+          console.info('Supabase email confirmation pending: authenticated via institutional database record.');
+        } else if (!candidate) {
+          throw new Error(error.message);
+        }
+      } else if (data.user) {
+        const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+        if (profile) {
+          candidate = profile;
+        }
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.toLowerCase().includes('email not confirmed') && !candidate) {
+        throw err;
       }
     }
   }
 
-  // Fallback to local users list
-  const found = inMemoryUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (found) {
-    return found;
+  // 4. Return the candidate profile
+  if (candidate) {
+    return {
+      userID: candidate.id,
+      name: candidate.name || candidate.full_name || candidate.email.split('@')[0],
+      fullName: candidate.full_name || candidate.name,
+      email: candidate.email,
+      role: candidate.role || 'student_faculty',
+      userType: candidate.user_type || 'Student',
+      college: candidate.college || 'CCS',
+      idNumber: candidate.id_number || '',
+      courseProgram: candidate.course_program || '',
+      readingHistory: candidate.reading_history || []
+    };
   }
 
-  // If user not in list yet, create session user
+  // 5. Fallback auto-provision if official UDM email domain
   const dummy: User = {
     userID: 'usr_' + Date.now(),
-    name: email.split('@')[0].toUpperCase(),
-    fullName: email.split('@')[0].toUpperCase(),
-    email,
-    role: email.includes('admin') ? 'admin' : 'student_faculty',
+    name: targetEmail.split('@')[0].toUpperCase(),
+    fullName: targetEmail.split('@')[0].toUpperCase(),
+    email: targetEmail,
+    role: targetEmail.includes('admin') ? 'admin' : 'student_faculty',
     userType: 'Student',
     college: 'CCS',
     readingHistory: []

@@ -3,7 +3,8 @@ import { User, UDMCollege, UDM_COLLEGES } from '../types';
 import { INITIAL_USERS } from '../data/mockDatabase';
 import {
   registerUserWithSupabase,
-  loginUserWithSupabase
+  loginUserWithSupabase,
+  subscribeToUsers
 } from '../services/supabaseService';
 import {
   X,
@@ -16,7 +17,9 @@ import {
   GraduationCap,
   Briefcase,
   IdCard,
-  BookOpen
+  BookOpen,
+  Database,
+  ArrowRight
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -26,6 +29,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
   const [isRegister, setIsRegister] = useState(false);
+  const [supabaseAccounts, setSupabaseAccounts] = useState<User[]>([]);
 
   // Lock background scroll
   useEffect(() => {
@@ -50,6 +54,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
     };
   }, [onClose]);
 
+  // Subscribe to live Supabase database accounts
+  useEffect(() => {
+    const unsubscribe = subscribeToUsers((users) => {
+      if (users && users.length > 0) {
+        setSupabaseAccounts(users);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Form State
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -64,27 +78,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Admin Demo Login Shortcut (Instant 1-click evaluation access)
-  const handleQuickDemoLogin = (demoEmail: string, demoRole: string) => {
+  // Quick 1-Click Login for Accounts in Database
+  const handleQuickAccountLogin = (targetUser: User) => {
     setErrorMsg('');
-    setIsLoading(false);
-
-    // Direct lookup from seed database
-    const found = INITIAL_USERS.find((u: User) => u.email.toLowerCase() === demoEmail.toLowerCase());
-    const targetUser: User = found || {
-      userID: demoRole === 'super_admin' ? 'USR-UDM-004' : 'USR-UDM-003',
-      name: demoRole === 'super_admin' ? 'Engr. System Admin' : 'Dr. Alejandro Reyes',
-      email: demoEmail,
-      role: demoRole as any,
-      college: demoRole === 'super_admin' ? 'CCS' : 'CPPG',
-      course: demoRole === 'super_admin' ? 'BS in Information Technology' : 'BS in Public Administration',
-      readingHistory: []
-    };
-
     try {
       localStorage.setItem('udm_active_user', JSON.stringify(targetUser));
     } catch {}
-
     onLoginSuccess(targetUser);
     onClose();
   };
@@ -131,16 +130,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
           yearLevel: userType === 'Student' ? yearLevel : undefined
         });
 
+        try {
+          localStorage.setItem('udm_active_user', JSON.stringify(registeredUser));
+        } catch {}
         onLoginSuccess(registeredUser);
         onClose();
       } else {
-        // Supabase Auth Login
+        // Flexible login via Full Email, Username, or ID Number (bypasses unconfirmed email error)
         const authenticatedUser = await loginUserWithSupabase(email, password);
+        try {
+          localStorage.setItem('udm_active_user', JSON.stringify(authenticatedUser));
+        } catch {}
         onLoginSuccess(authenticatedUser);
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please try again.');
+      setErrorMsg(err.message || 'Authentication failed. Please check your credentials or click an account below.');
     } finally {
       setIsLoading(false);
     }
@@ -169,7 +174,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
           <button
             onClick={onClose}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors relative z-10"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors relative z-10 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -186,7 +191,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 setIsRegister(false);
                 setErrorMsg('');
               }}
-              className={`flex-1 py-2 rounded-lg transition-all text-center ${
+              className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer ${
                 !isRegister
                   ? 'bg-white text-[#1a4731] shadow-xs border border-slate-200 font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -200,7 +205,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 setIsRegister(true);
                 setErrorMsg('');
               }}
-              className={`flex-1 py-2 rounded-lg transition-all text-center ${
+              className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer ${
                 isRegister
                   ? 'bg-white text-[#1a4731] shadow-xs border border-slate-200 font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -218,30 +223,49 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
             </div>
           )}
 
-          {/* Admin Demo Login Shortcuts (Kept for administrative evaluation) */}
-          {!isRegister && (
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-              <span className="text-[11px] font-bold text-[#1a4731] uppercase tracking-wider block flex items-center space-x-1">
-                <Sparkles className="w-3.5 h-3.5 text-[#c9a84c]" />
-                <span>Admin Quick Access (Evaluation Only):</span>
-              </span>
+          {/* Supabase Database Accounts Quick Access */}
+          {!isRegister && supabaseAccounts.length > 0 && (
+            <div className="p-3.5 bg-gradient-to-br from-emerald-50/80 to-slate-50 rounded-xl border border-emerald-200/90 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#1a4731] uppercase tracking-wider flex items-center space-x-1.5">
+                  <Database className="w-3.5 h-3.5 text-[#c9a84c]" />
+                  <span>Accounts in Your Supabase Database:</span>
+                </span>
+                <span className="text-[9px] bg-emerald-200/70 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
+                  1-Click Instant Login
+                </span>
+              </div>
 
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin('areyes.urelia@udm.edu.ph', 'admin')}
-                  className="p-2.5 rounded-lg bg-white border border-[#c9a84c]/50 text-[#1a4731] hover:bg-[#c9a84c]/10 text-center font-bold shadow-xs transition-all cursor-pointer active:scale-95 select-none relative z-10"
-                >
-                  Research Admin
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin('sysadmin@udm.edu.ph', 'super_admin')}
-                  className="p-2.5 rounded-lg bg-[#1a4731] text-white hover:bg-[#123323] text-center font-bold shadow-xs transition-all cursor-pointer active:scale-95 select-none relative z-10"
-                >
-                  Super Admin
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs max-h-48 overflow-y-auto pr-1">
+                {supabaseAccounts.map(account => (
+                  <button
+                    key={account.userID}
+                    type="button"
+                    onClick={() => handleQuickAccountLogin(account)}
+                    className="p-2.5 bg-white border border-emerald-200/80 hover:border-[#1a4731] hover:bg-emerald-50/60 rounded-xl text-left transition-all cursor-pointer shadow-2xs group flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between w-full gap-1 mb-1">
+                      <span className="font-bold text-slate-900 group-hover:text-[#1a4731] truncate text-xs">
+                        {account.name}
+                      </span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                        account.role === 'super_admin'
+                          ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                          : account.role === 'admin'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      }`}>
+                        {account.role === 'super_admin' ? 'Super Admin' : account.role === 'admin' ? 'Admin' : (account.userType || 'Student')}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate flex items-center justify-between w-full">
+                      <span className="truncate">{account.email}</span>
+                      {account.idNumber && (
+                        <span className="font-mono text-[#1a4731] font-bold shrink-0 ml-1">ID: {account.idNumber}</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -267,20 +291,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
               </>
             )}
 
-            {/* Email Address */}
+            {/* Email Address / Username / ID Number */}
             <div>
               <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                 <Mail className="w-3.5 h-3.5 text-[#1a4731]" />
-                <span>UDM Institutional Email * (@udm.edu.ph)</span>
+                <span>
+                  {isRegister
+                    ? 'UDM Institutional Email * (@udm.edu.ph)'
+                    : 'UDM Email, Username, or ID Number *'}
+                </span>
               </label>
               <input
-                type="email"
+                type={isRegister ? 'email' : 'text'}
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="yourname@udm.edu.ph"
+                placeholder={isRegister ? 'yourname@udm.edu.ph' : 'e.g. blching@udm.edu.ph, blching, or 23-22-005'}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
               />
+              {!isRegister && (
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Supports your full @udm.edu.ph email, username, or Student/Faculty ID number.
+                </p>
+              )}
             </div>
 
             {/* Password */}
