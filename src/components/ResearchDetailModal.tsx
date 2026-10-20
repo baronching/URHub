@@ -622,7 +622,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   }`}>
                     <Building2 className="w-3.5 h-3.5 shrink-0" />
                     <span>
-                      {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? '👨‍🏫🏛️ Faculty & Administration Research' : research.department} • {research.course}
+                      {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? 'Faculty & Administration Research' : research.department} • {research.course}
                     </span>
                   </span>
                   <span className="flex items-center space-x-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">

@@ -94,8 +94,8 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         <div className="flex flex-wrap items-center gap-1.5">
           {[
             { id: 'ALL' as const, label: 'All Researches' },
-            { id: 'Student' as const, label: '🎓 Student Capstones & Theses' },
-            { id: 'Faculty_Admin' as const, label: '👨‍🏫🏛️ Faculty & Administration Researches' }
+            { id: 'Student' as const, label: 'Student Capstones & Theses' },
+            { id: 'Faculty_Admin' as const, label: 'Faculty & Administration Researches' }
           ].map(tab => {
             const isTabActive = (filters.authorCategory || 'ALL') === tab.id;
             return (

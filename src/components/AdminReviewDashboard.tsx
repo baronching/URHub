@@ -342,7 +342,7 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
       <h1>${escapeHtml(sub.submissionID)} — Manuscript Evaluation Reader</h1>
     </div>
     <div class="btn-group">
-      <button class="btn btn-print" onclick="window.print()">🖨️ Print / Save PDF</button>
+      <button class="btn btn-print" onclick="window.print()">Print / Save PDF</button>
       <button class="btn btn-close" onclick="window.close()">✕ Close Reader</button>
     </div>
   </div>
@@ -985,10 +985,10 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 shadow-2xl space-y-4">
             
-            {/* Header: 📑 Evaluate Submission: SUB-XXXX-XXX */}
+            {/* Header: Evaluate Submission: SUB-XXXX-XXX */}
             <div className="border-b border-dashed border-slate-300 pb-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <span className="text-xl" role="img" aria-label="Evaluate">📑</span>
+                <FileText className="w-5 h-5 text-[#c9a84c]" />
                 <h3 className="text-base sm:text-lg font-bold text-[#1a4731] tracking-tight">
                   Evaluate Submission: <span className="font-mono text-slate-800">{selectedSubmission.submissionID}</span>
                 </h3>
@@ -1020,14 +1020,14 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
               </p>
             </div>
 
-            {/* Document Action Buttons: [ 📄 View Full Document (New Tab) ] [ 📥 Download PDF ] */}
+            {/* Document Action Buttons: [ View Full Document (New Tab) ] [ Download PDF ] */}
             <div className="flex flex-wrap items-center gap-3 pt-0.5 pb-1">
               <button
                 type="button"
                 onClick={() => handleViewFullDocumentInNewTab(selectedSubmission)}
                 className="px-3.5 py-2 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-[#1a4731] border border-[#1a4731]/40 shadow-xs flex items-center space-x-2 transition-all hover:border-[#1a4731] cursor-pointer"
               >
-                <span className="text-sm">📄</span>
+                <FileText className="w-3.5 h-3.5 text-[#1a4731]" />
                 <span>View Full Document (New Tab)</span>
                 <ExternalLink className="w-3.5 h-3.5 text-[#1a4731] ml-0.5" />
               </button>
@@ -1038,7 +1038,7 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                 disabled={isDownloadingPdf}
                 className="px-3.5 py-2 rounded-lg text-xs font-bold bg-[#c9a84c]/10 hover:bg-[#c9a84c]/20 text-[#7a5c1a] border border-[#c9a84c]/40 shadow-xs flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-60"
               >
-                <span className="text-sm">📥</span>
+                <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
                 <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
               </button>
 

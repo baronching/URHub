@@ -346,8 +346,8 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { id: 'Student' as const, label: '🎓 Student Capstone / Thesis', desc: 'Authored by student researcher(s)' },
-                    { id: 'Faculty_Admin' as const, label: '👨‍🏫🏛️ Faculty & Administration Research', desc: 'Authored by UDM professors, faculty, or university administration' }
+                    { id: 'Student' as const, label: 'Student Capstone / Thesis', desc: 'Authored by student researcher(s)' },
+                    { id: 'Faculty_Admin' as const, label: 'Faculty & Administration Research', desc: 'Authored by UDM professors, faculty, or university administration' }
                   ].map(cls => (
                     <button
                       key={cls.id}

@@ -57,7 +57,7 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
               }`}
             >
               {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin'
-                ? '👨‍🏫🏛️ FAC-ADM'
+                ? 'FAC-ADM'
                 : research.department}
             </span>
             <span className="text-[11px] sm:text-xs text-slate-500 font-semibold truncate max-w-[140px] sm:max-w-[200px]" title={collegeInfo?.name}>
