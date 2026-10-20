@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Submission, AccessRequest, UDM_COLLEGES } from '../types';
-import { getUserRoleDisplayLabel } from '../utils/userUtils';
 import {
   CheckSquare,
   CheckCircle2,
@@ -13,9 +12,9 @@ import {
   Calendar,
   KeyRound,
   ShieldCheck,
-  ShieldAlert,
-  UserCheck
+  ShieldAlert
 } from 'lucide-react';
+import { getUserRoleDisplayLabel } from '../utils/userUtils';
 
 interface AdminReviewDashboardProps {
   submissions: Submission[];
@@ -241,7 +240,7 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                     <span>•</span>
                     <span>Email: <strong>{req.userEmail}</strong></span>
                     <span>•</span>
-                    <span>Role: <strong>{getUserRoleDisplayLabel(req.userRoleOrType)}</strong></span>
+                    <span>Role/Type: <strong>{getUserRoleDisplayLabel(req.userRoleOrType || 'Student')}</strong></span>
                   </div>
 
                   {req.reviewNote && (
@@ -390,7 +389,7 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                 <span>Requester: {selectedAccessRequest.userName}</span>
                 <span className="text-[#1a4731]">{selectedAccessRequest.college || 'UDM'}</span>
               </div>
-              <p className="text-slate-600">Email: {selectedAccessRequest.userEmail} ({selectedAccessRequest.userRoleOrType || 'Student'})</p>
+              <p className="text-slate-600">Email: {selectedAccessRequest.userEmail} ({getUserRoleDisplayLabel(selectedAccessRequest.userRoleOrType || 'Student')})</p>
               <div className="pt-2 border-t border-slate-200">
                 <span className="font-bold text-slate-700 block mb-0.5">Target Research Paper:</span>
                 <p className="font-bold text-slate-900">{selectedAccessRequest.researchTitle}</p>

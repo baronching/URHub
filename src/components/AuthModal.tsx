@@ -119,7 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+      setErrorMsg(err.message || 'Authentication failed. Please check your credentials or click an account below.');
     } finally {
       setIsLoading(false);
     }
@@ -293,7 +293,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
                     >
                       <option value="Student">Student</option>
-                      <option value="Faculty_Admin">Faculty/Admin</option>
+                      <option value="Faculty_Admin">Faculty & Administration</option>
                     </select>
                   </div>
 

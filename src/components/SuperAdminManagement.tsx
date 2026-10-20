@@ -40,19 +40,39 @@ export const SuperAdminManagement: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleRoleUpdate = async (userID: string, role: UserRole) => {
+  const handleRoleUpdate = async (userID: string, roleInput: string) => {
     try {
-      // 1. Direct real-time Supabase update
-      await updateUserRole(userID, role);
+      let roleToSave: UserRole = 'student_faculty';
+      let userTypeToSave: 'Student' | 'Faculty_Admin' = 'Student';
 
-      // 2. Also notify backend API
+      if (roleInput === 'super_admin' || roleInput === 'admin') {
+        roleToSave = 'super_admin';
+        userTypeToSave = 'Faculty_Admin';
+      } else if (roleInput === 'faculty') {
+        roleToSave = 'student_faculty';
+        userTypeToSave = 'Faculty_Admin';
+      } else {
+        roleToSave = 'student_faculty';
+        userTypeToSave = 'Student';
+      }
+
+      await updateUserRole(userID, roleToSave);
+
+      // Local state update
+      setUsers(prev =>
+        prev.map(u =>
+          u.userID === userID ? { ...u, role: roleToSave, userType: userTypeToSave } : u
+        )
+      );
+
+      // Also notify backend API
       fetch(`/api/admin/users/${userID}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role })
+        body: JSON.stringify({ role: roleToSave, userType: userTypeToSave })
       }).catch(() => null);
 
-      setMsg('User role updated successfully in Supabase.');
+      setMsg('User role updated successfully.');
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
@@ -142,12 +162,12 @@ export const SuperAdminManagement: React.FC = () => {
                   <td className="p-3 font-mono text-slate-700">{u.college || 'CCS'}</td>
                   <td className="p-3">
                     <select
-                      value={u.role}
-                      onChange={e => handleRoleUpdate(u.userID, e.target.value as UserRole)}
-                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer"
+                      value={u.role === 'super_admin' || u.role === 'admin' ? 'super_admin' : (u.userType === 'Faculty_Admin' ? 'faculty' : 'student_faculty')}
+                      onChange={e => handleRoleUpdate(u.userID, e.target.value)}
+                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer font-bold text-xs"
                     >
                       <option value="student_faculty">Student</option>
-                      <option value="admin">Faculty/Admin</option>
+                      <option value="faculty">Faculty/Admin</option>
                       <option value="super_admin">URELIA</option>
                     </select>
                   </td>

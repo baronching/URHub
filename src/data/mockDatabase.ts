@@ -23,7 +23,7 @@ export const INITIAL_USERS: User[] = [
     name: 'Prof. Maria Santos',
     email: 'msantos@udm.edu.ph',
     password: 'Password123!',
-    role: 'admin',
+    role: 'student_faculty',
     userType: 'Faculty_Admin',
     college: 'CED',
     course: 'Bachelor of Secondary Education',

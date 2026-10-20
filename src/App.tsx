@@ -15,7 +15,9 @@ import { SuperAdminManagement } from './components/SuperAdminManagement';
 import { SDGSection } from './components/SDGSection';
 import { AuthModal } from './components/AuthModal';
 import { PrivacyConsentModal } from './components/PrivacyConsentModal';
-import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck, Download } from 'lucide-react';
+import { isUreliaUser, canSubmitResearch } from './utils/userUtils';
+import { generateCombinedAbstractsPdf } from './utils/pdfExport';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import {
   seedInitialDatabaseIfEmpty,
@@ -32,7 +34,6 @@ import {
   logoutUserWithSupabase
 } from './services/supabaseService';
 import { calculateIDF, getResearchTokens, scoreSearchRelevance, generateHybridRecommendations } from './utils/mlEngine';
-import { canSubmitResearch, isUrelia } from './utils/userUtils';
 import { INITIAL_USERS, INITIAL_RESEARCH, INITIAL_SUBMISSIONS } from './data/mockDatabase';
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
   const [recommendations, setRecommendations] = useState<(Recommendation & { paper?: Research })[]>([]);
   const [targetRecommendationCollege, setTargetRecommendationCollege] = useState<UDMCollege>('CCS');
   const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [selectedPaperIds, setSelectedPaperIds] = useState<string[]>([]);
 
   const [selectedResearch, setSelectedResearch] = useState<Research | null>(null);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
@@ -72,12 +74,11 @@ export default function App() {
     sortBy: 'relevance'
   });
 
-  // Protect URELIA-exclusive tabs (Review Queue, Analytics & Reports, User Management)
+  // Protect Admin tabs: Review Queue, Analytics & Reports, and User Management are exclusively accessible to URELIA
   useEffect(() => {
-    if (activeTab === 'admin_review' || activeTab === 'analytics' || activeTab === 'super_admin') {
-      if (!isUrelia(currentUser)) {
-        setActiveTab('archive');
-      }
+    const isUrelia = isUreliaUser(currentUser);
+    if (!isUrelia && (activeTab === 'admin_review' || activeTab === 'analytics' || activeTab === 'super_admin')) {
+      setActiveTab('archive');
     }
   }, [currentUser, activeTab]);
 
@@ -88,6 +89,7 @@ export default function App() {
   };
 
   // Safe handler for submission modal trigger
+  // Students and Guests are strictly blocked with exact toast message
   const handleOpenSubmissionModal = () => {
     if (!currentUser) {
       setShowAuthModal(true);
@@ -101,25 +103,47 @@ export default function App() {
     setShowSubmissionModal(true);
   };
 
-  // Hard-block URL hash and state tampering attempts for research submission
-  useEffect(() => {
-    const handleUrlOrHash = () => {
-      const hash = window.location.hash.toLowerCase();
-      if (hash === '#submit' || hash === '#submission' || hash === '#new-submission') {
-        window.history.replaceState(null, '', window.location.pathname);
-        if (!canSubmitResearch(currentUser)) {
-          setShowSubmissionModal(false);
-          triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
-        } else {
-          setShowSubmissionModal(true);
-        }
-      }
-    };
+  // Multi-Select handlers for Research Papers Bulk Abstract Export
+  const handleToggleSelectPaper = (researchID: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedPaperIds(prev =>
+      prev.includes(researchID) ? prev.filter(id => id !== researchID) : [...prev, researchID]
+    );
+  };
 
-    handleUrlOrHash();
-    window.addEventListener('hashchange', handleUrlOrHash);
-    return () => window.removeEventListener('hashchange', handleUrlOrHash);
-  }, [currentUser]);
+  const handleSelectAllVisible = () => {
+    const visibleIds = filteredResearchList.map(r => r.researchID);
+    if (visibleIds.length === 0) return;
+    const allVisibleSelected = visibleIds.every(id => selectedPaperIds.includes(id));
+    if (allVisibleSelected) {
+      // Deselect all visible
+      setSelectedPaperIds(prev => prev.filter(id => !visibleIds.includes(id)));
+    } else {
+      // Select all visible (union without duplicates)
+      setSelectedPaperIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedPaperIds([]);
+  };
+
+  const handleDownloadSelectedAbstracts = () => {
+    if (selectedPaperIds.length === 0) return;
+    const selectedPapers = rawResearchList.filter(
+      r => (r.status === 'approved' || !r.status) && selectedPaperIds.includes(r.researchID)
+    );
+    if (selectedPapers.length === 0) {
+      triggerToast('No valid research papers selected.', 'error');
+      return;
+    }
+    try {
+      generateCombinedAbstractsPdf(selectedPapers);
+      triggerToast(`Successfully downloaded ${selectedPapers.length} abstracts as combined PDF!`, 'success');
+    } catch (err: any) {
+      triggerToast('Failed to export PDF: ' + err.message, 'error');
+    }
+  };
 
   // 1. Initialize & Subscribe to live Supabase database & Auth
   useEffect(() => {
@@ -511,6 +535,58 @@ export default function App() {
               />
             </div>
 
+            {/* Multi-Select Research Papers & Combined Abstract PDF Export Toolbar */}
+            {filteredResearchList.length > 0 && (
+              <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center space-x-3">
+                  <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredResearchList.length > 0 &&
+                        filteredResearchList.every(r => selectedPaperIds.includes(r.researchID))
+                      }
+                      onChange={handleSelectAllVisible}
+                      className="w-4 h-4 rounded border-slate-300 text-[#1a4731] focus:ring-[#1a4731] focus:ring-1 cursor-pointer accent-[#1a4731]"
+                    />
+                    <span>Select All in Results ({filteredResearchList.length})</span>
+                  </label>
+
+                  {selectedPaperIds.length > 0 && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#1a4731]/10 text-[#1a4731] font-bold border border-[#1a4731]/20">
+                      {selectedPaperIds.length} {selectedPaperIds.length === 1 ? 'paper' : 'papers'} selected
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {selectedPaperIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearSelection}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-rose-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      Clear Selection
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadSelectedAbstracts}
+                    disabled={selectedPaperIds.length === 0}
+                    className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer ${
+                      selectedPaperIds.length > 0
+                        ? 'bg-[#1a4731] hover:bg-[#123323] text-white'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                    }`}
+                  >
+                    <Download className={`w-3.5 h-3.5 ${selectedPaperIds.length > 0 ? 'text-[#c9a84c]' : 'text-slate-400'}`} />
+                    <span>Download Selected Abstracts (PDF)</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Research Cards Grid */}
             {filteredResearchList.length === 0 ? (
               <div className="p-12 text-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -540,6 +616,8 @@ export default function App() {
                   <ResearchCard
                     key={paper.researchID}
                     research={paper}
+                    isSelected={selectedPaperIds.includes(paper.researchID)}
+                    onToggleSelect={handleToggleSelectPaper}
                     onSelect={handleSelectResearch}
                     onDownloadAbstract={handleDownloadAbstract}
                   />
@@ -584,11 +662,6 @@ export default function App() {
         )}
 
         {/* UN Sustainable Development Goals (SDG) Alignment Section */}
-        {activeTab === 'sdgs' && (
-          <div className="space-y-6">
-            <SDGSection />
-          </div>
-        )}
         {activeTab === 'archive' && <SDGSection />}
       </main>
 
@@ -622,7 +695,7 @@ export default function App() {
             try {
               localStorage.setItem('udm_active_user', JSON.stringify(user));
             } catch {}
-            if (isUrelia(user)) {
+            if (isUreliaUser(user)) {
               setActiveTab('admin_review');
             } else {
               setActiveTab('archive');

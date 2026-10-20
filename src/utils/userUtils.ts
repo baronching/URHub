@@ -1,61 +1,105 @@
 /**
  * User formatting and role helper utilities
+ * Standardized Role Labels:
+ * - Student -> 'Student'
+ * - Faculty -> 'Faculty/Admin'
+ * - Super Admin -> 'URELIA'
  */
 
 import { UserRole, User } from '../types';
 
-export function getUserRoleDisplayLabel(roleOrUser?: UserRole | string | { role?: UserRole | string; userType?: string }): string {
-  if (typeof roleOrUser === 'object' && roleOrUser !== null) {
-    if (roleOrUser.role === 'super_admin' || (roleOrUser.role as string) === 'URELIA') {
+/**
+ * Standardized role display label mapping:
+ * - Student -> 'Student'
+ * - Faculty -> 'Faculty/Admin'
+ * - Super Admin -> 'URELIA'
+ */
+export function getUserRoleDisplayLabel(roleOrUser?: UserRole | string | User | null): string {
+  if (!roleOrUser) return 'Guest';
+
+  // If user object passed
+  if (typeof roleOrUser === 'object') {
+    const u = roleOrUser as User;
+    if (isUreliaUser(u)) {
       return 'URELIA';
     }
-    if (
-      roleOrUser.role === 'admin' ||
-      roleOrUser.userType === 'Faculty_Admin' ||
-      (roleOrUser.role as string) === 'Faculty/Admin' ||
-      (roleOrUser.role as string) === 'Faculty'
-    ) {
+    if (isFacultyUser(u)) {
       return 'Faculty/Admin';
     }
     return 'Student';
   }
 
-  const role = roleOrUser;
-  if (role === 'super_admin' || role === 'URELIA') {
+  // If string/role value passed
+  const r = String(roleOrUser).toLowerCase().trim();
+  if (r === 'super_admin' || r === 'super admin' || r === 'admin' || r === 'urelia') {
     return 'URELIA';
   }
-  if (role === 'admin' || role === 'Faculty_Admin' || role === 'Faculty/Admin' || role === 'Faculty') {
+  if (r === 'faculty' || r === 'faculty_admin' || r === 'faculty/admin') {
     return 'Faculty/Admin';
+  }
+  if (r === 'student' || r === 'student_faculty') {
+    return 'Student';
   }
   return 'Student';
 }
 
-export function isUrelia(user?: User | null): boolean {
+/**
+ * Checks if user has central URELIA Super Admin privileges
+ */
+export function isUreliaUser(user?: User | null): boolean {
   if (!user) return false;
-  return user.role === 'super_admin' || (user.role as string) === 'URELIA';
-}
-
-export function isFacultyAdmin(user?: User | null): boolean {
-  if (!user) return false;
-  if (isUrelia(user)) return false;
+  const role = String(user.role || '').toLowerCase();
+  const userType = String(user.userType || '').toLowerCase();
   return (
-    user.role === 'admin' ||
-    user.userType === 'Faculty_Admin' ||
-    (user.role as string) === 'Faculty/Admin' ||
-    (user.role as string) === 'Faculty'
+    role === 'super_admin' ||
+    role === 'super admin' ||
+    role === 'admin' ||
+    userType === 'super admin' ||
+    userType === 'urelia' ||
+    user.email?.toLowerCase().includes('.urelia@') ||
+    user.email?.toLowerCase().startsWith('sysadmin@')
   );
 }
 
-export function isStudent(user?: User | null): boolean {
+/**
+ * Checks if user is authenticated Faculty/Admin
+ */
+export function isFacultyUser(user?: User | null): boolean {
   if (!user) return false;
-  if (isUrelia(user) || isFacultyAdmin(user)) return false;
-  return user.userType === 'Student' || user.role === 'student_faculty';
+  if (isUreliaUser(user)) return false;
+
+  const role = String(user.role || '').toLowerCase();
+  const userType = String(user.userType || '').toLowerCase();
+
+  return (
+    userType === 'faculty_admin' ||
+    userType === 'faculty' ||
+    userType === 'faculty/admin' ||
+    role === 'faculty' ||
+    role === 'faculty_admin' ||
+    user.email?.toLowerCase().startsWith('faculty@') ||
+    user.email?.toLowerCase().startsWith('prof.') ||
+    user.name?.toLowerCase().startsWith('prof.') ||
+    user.name?.toLowerCase().startsWith('dr.')
+  );
 }
 
+/**
+ * Checks if user is Student
+ */
+export function isStudentUser(user?: User | null): boolean {
+  if (!user) return false;
+  return !isUreliaUser(user) && !isFacultyUser(user);
+}
+
+/**
+ * Authorization check for research submission:
+ * Only Faculty/Admin and URELIA may submit research.
+ * Students and Guests are strictly unauthorized.
+ */
 export function canSubmitResearch(user?: User | null): boolean {
   if (!user) return false;
-  if (user.userType === 'Student') return false;
-  return isUrelia(user) || isFacultyAdmin(user);
+  return isUreliaUser(user) || isFacultyUser(user);
 }
 
 export function formatUserDisplayName(name?: string, email?: string): string {
