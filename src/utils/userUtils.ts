@@ -34,7 +34,7 @@ export function getUserRoleDisplayLabel(roleOrUser?: UserRole | string | User | 
   if (r === 'super_admin' || r === 'super admin' || r === 'admin' || r === 'urelia') {
     return 'URELIA';
   }
-  if (r === 'faculty' || r === 'faculty_admin' || r === 'faculty/admin') {
+  if (r === 'faculty' || r === 'faculty_admin' || r === 'faculty/admin' || r.includes('faculty')) {
     return 'Faculty/Admin';
   }
   if (r === 'student' || r === 'student_faculty') {
@@ -75,8 +75,11 @@ export function isFacultyUser(user?: User | null): boolean {
     userType === 'faculty_admin' ||
     userType === 'faculty' ||
     userType === 'faculty/admin' ||
+    userType.includes('faculty') ||
     role === 'faculty' ||
     role === 'faculty_admin' ||
+    role === 'faculty/admin' ||
+    role.includes('faculty') ||
     user.email?.toLowerCase().startsWith('faculty@') ||
     user.email?.toLowerCase().startsWith('prof.') ||
     user.name?.toLowerCase().startsWith('prof.') ||

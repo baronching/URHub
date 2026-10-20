@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, SystemSettings, UDMCollege, UDM_COLLEGES } from '../types';
 import { INITIAL_USERS, INITIAL_SYSTEM_SETTINGS } from '../data/mockDatabase';
-import { getUserRoleDisplayLabel } from '../utils/userUtils';
+import { getUserRoleDisplayLabel, isUreliaUser, isFacultyUser } from '../utils/userUtils';
 import { subscribeToUsers, updateUserRole } from '../services/supabaseService';
 import { Settings, Users, Shield, Save, CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -56,26 +56,31 @@ export const SuperAdminManagement: React.FC = () => {
         userTypeToSave = 'Student';
       }
 
-      await updateUserRole(userID, roleToSave);
-
-      // Local state update
+      // 1. Immediate local state update for responsive feedback
       setUsers(prev =>
         prev.map(u =>
-          u.userID === userID ? { ...u, role: roleToSave, userType: userTypeToSave } : u
+          (u.userID === userID || (u as any).id === userID || u.email === userID)
+            ? { ...u, role: roleToSave, userType: userTypeToSave }
+            : u
         )
       );
 
-      // Also notify backend API
-      fetch(`/api/admin/users/${userID}`, {
+      // 2. Persist to Supabase and in-memory store
+      await updateUserRole(userID, roleToSave, userTypeToSave);
+
+      // 3. Notify backend server route (passes both role and userType)
+      fetch(`/api/admin/users/${encodeURIComponent(userID)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: roleToSave, userType: userTypeToSave })
-      }).catch(() => null);
+      }).catch(err => console.warn('Backend sync warning:', err));
 
       setMsg('User role updated successfully.');
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
-      console.error(err);
+      console.error('Role update error:', err);
+      setMsg('Failed to update user role.');
+      setTimeout(() => setMsg(''), 3000);
     }
   };
 
@@ -162,7 +167,7 @@ export const SuperAdminManagement: React.FC = () => {
                   <td className="p-3 font-mono text-slate-700">{u.college || 'CCS'}</td>
                   <td className="p-3">
                     <select
-                      value={u.role === 'super_admin' || u.role === 'admin' ? 'super_admin' : (u.userType === 'Faculty_Admin' ? 'faculty' : 'student_faculty')}
+                      value={isUreliaUser(u) ? 'super_admin' : (isFacultyUser(u) ? 'faculty' : 'student_faculty')}
                       onChange={e => handleRoleUpdate(u.userID, e.target.value)}
                       className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer font-bold text-xs"
                     >

@@ -24,6 +24,7 @@ import {
   subscribeToResearches,
   subscribeToSubmissions,
   subscribeToAccessRequests,
+  subscribeToUsers,
   recordResearchView,
   recordResearchDownload,
   recordUserReadingHistory,
@@ -204,11 +205,43 @@ export default function App() {
       setAccessRequestsList(data);
     });
 
+    // Live subscription to Users collection (instantly reflects role changes like Silvia Ambag -> Faculty/Admin)
+    const unsubscribeUsers = subscribeToUsers((allUsers) => {
+      if (!allUsers || allUsers.length === 0) return;
+      setCurrentUser(prev => {
+        if (!prev) return null;
+        const updated = allUsers.find(u =>
+          (u.userID && prev.userID && u.userID === prev.userID) ||
+          (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase())
+        );
+        if (updated) {
+          const hasChanged =
+            updated.role !== prev.role ||
+            updated.userType !== prev.userType ||
+            (updated.college && updated.college !== prev.college);
+          if (hasChanged) {
+            const merged: User = {
+              ...prev,
+              role: updated.role,
+              userType: updated.userType,
+              college: updated.college || prev.college
+            };
+            try {
+              localStorage.setItem('udm_active_user', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          }
+        }
+        return prev;
+      });
+    });
+
     return () => {
       unsubscribeAuth();
       unsubscribeResearches();
       unsubscribeSubmissions();
       unsubscribeAccessRequests();
+      unsubscribeUsers();
     };
   }, []);
 

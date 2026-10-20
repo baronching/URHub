@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Research, Submission, User, SystemSettings, UDMCollege, AccessRequest } from '../types';
+import { Research, Submission, User, UserRole, SystemSettings, UDMCollege, AccessRequest } from '../types';
 import {
   INITIAL_RESEARCH,
   INITIAL_USERS,
@@ -246,18 +246,34 @@ export function subscribeToUsers(callback: (users: User[]) => void) {
   const fetchUsers = async () => {
     const { data, error } = await supabase.from('users').select('*');
     if (!error && data && data.length > 0) {
-      const mapped: User[] = data.map(u => ({
-        userID: u.id || u.user_id,
-        name: u.name || u.full_name,
-        fullName: u.full_name || u.name,
-        email: u.email,
-        role: u.role,
-        userType: u.user_type,
-        college: u.college as UDMCollege,
-        idNumber: u.id_number,
-        courseProgram: u.course_program,
-        readingHistory: u.reading_history || []
-      }));
+      const mapped: User[] = data.map(u => {
+        let detectedType: 'Student' | 'Faculty_Admin' = 'Student';
+        const rawType = String(u.user_type || '').toLowerCase();
+        const rawRole = String(u.role || '').toLowerCase();
+        if (
+          rawType.includes('faculty') ||
+          rawRole === 'faculty' ||
+          rawRole === 'faculty_admin' ||
+          rawRole === 'admin' ||
+          rawRole === 'super_admin' ||
+          rawType.includes('admin')
+        ) {
+          detectedType = 'Faculty_Admin';
+        }
+
+        return {
+          userID: u.id || u.user_id,
+          name: u.name || u.full_name,
+          fullName: u.full_name || u.name,
+          email: u.email,
+          role: u.role || (detectedType === 'Faculty_Admin' ? 'student_faculty' : 'student_faculty'),
+          userType: (u.user_type as any) || detectedType,
+          college: u.college as UDMCollege,
+          idNumber: u.id_number,
+          courseProgram: u.course_program,
+          readingHistory: u.reading_history || []
+        };
+      });
       inMemoryUsers = mapped;
       callback(mapped);
     }
@@ -488,12 +504,86 @@ export async function saveUser(user: User): Promise<void> {
   }
 }
 
-export async function updateUserRole(userID: string, newRole: User['role']): Promise<void> {
-  inMemoryUsers = inMemoryUsers.map(u => u.userID === userID ? { ...u, role: newRole } : u);
+export async function updateUserRole(
+  userID: string,
+  newRole: User['role'] | string,
+  newUserType?: User['userType']
+): Promise<void> {
+  const resolvedUserType = newUserType || (
+    newRole === 'super_admin' ? 'Faculty_Admin' : (
+      String(newRole).toLowerCase().includes('faculty') ? 'Faculty_Admin' : undefined
+    )
+  );
+
+  inMemoryUsers = inMemoryUsers.map(u => {
+    if (u.userID === userID || (u as any).id === userID || (u as any).user_id === userID || u.email === userID) {
+      return {
+        ...u,
+        role: newRole as UserRole,
+        userType: resolvedUserType !== undefined ? resolvedUserType : u.userType
+      };
+    }
+    return u;
+  });
   notifyUsers();
 
   if (isSupabaseConfigured) {
-    await supabase.from('users').update({ role: newRole }).eq('id', userID);
+    try {
+      const updates: Record<string, any> = {};
+      if (newRole) updates.role = newRole;
+      if (resolvedUserType) updates.user_type = resolvedUserType;
+
+      const targetUser = inMemoryUsers.find(
+        u => u.userID === userID || (u as any).id === userID || (u as any).user_id === userID || u.email === userID
+      );
+
+      // 1. Try update by id = userID
+      let { data, error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userID)
+        .select();
+
+      // 2. If no rows affected or error, try user_id = userID
+      if (error || !data || data.length === 0) {
+        const res2 = await supabase
+          .from('users')
+          .update(updates)
+          .eq('user_id', userID)
+          .select();
+        if (res2.data && res2.data.length > 0) {
+          data = res2.data;
+          error = null;
+        }
+      }
+
+      // 3. If still no rows affected and email is present, try email
+      if ((error || !data || data.length === 0) && targetUser?.email) {
+        const res3 = await supabase
+          .from('users')
+          .update(updates)
+          .eq('email', targetUser.email)
+          .select();
+        if (res3.data && res3.data.length > 0) {
+          data = res3.data;
+          error = null;
+        }
+      }
+
+      // 4. If error happened (e.g. Postgres check constraint on role enum), fallback to role: 'student_faculty'
+      if (error) {
+        console.warn('Supabase role update attempt warning:', error.message);
+        if (updates.role === 'faculty') {
+          updates.role = 'student_faculty';
+          await supabase.from('users').update(updates).eq('id', userID);
+          if (targetUser?.email) {
+            await supabase.from('users').update(updates).eq('email', targetUser.email);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update user role in Supabase:', err);
+    }
   }
 }
 

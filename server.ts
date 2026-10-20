@@ -445,24 +445,49 @@ app.get('/api/analytics', (req: Request, res: Response) => {
 
 // Super Admin User Management
 app.get('/api/admin/users', async (req: Request, res: Response) => {
-  if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const isSupabaseConfigured = Boolean(
+    supabaseUrl &&
+    supabaseKey &&
+    supabaseUrl.startsWith('http') &&
+    !supabaseUrl.includes('your-project-ref')
+  );
+
+  if (isSupabaseConfigured) {
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+      const supabase = createClient(supabaseUrl!, supabaseKey!);
       const { data, error } = await supabase.from('users').select('*');
       if (!error && data && data.length > 0) {
-        const mapped = data.map(u => ({
-          userID: u.id,
-          name: u.name || u.full_name,
-          fullName: u.full_name || u.name,
-          email: u.email,
-          role: u.role,
-          userType: u.user_type,
-          college: u.college,
-          idNumber: u.id_number,
-          courseProgram: u.course_program,
-          readingHistory: u.reading_history || []
-        }));
+        const mapped = data.map(u => {
+          let detectedType: 'Student' | 'Faculty_Admin' = 'Student';
+          const rawType = String(u.user_type || '').toLowerCase();
+          const rawRole = String(u.role || '').toLowerCase();
+          if (
+            rawType.includes('faculty') ||
+            rawRole === 'faculty' ||
+            rawRole === 'faculty_admin' ||
+            rawRole === 'admin' ||
+            rawRole === 'super_admin' ||
+            rawType.includes('admin')
+          ) {
+            detectedType = 'Faculty_Admin';
+          }
+
+          return {
+            userID: u.id || u.user_id,
+            name: u.name || u.full_name,
+            fullName: u.full_name || u.name,
+            email: u.email,
+            role: u.role || (detectedType === 'Faculty_Admin' ? 'student_faculty' : 'student_faculty'),
+            userType: (u.user_type as any) || detectedType,
+            college: u.college,
+            idNumber: u.id_number,
+            courseProgram: u.course_program,
+            readingHistory: u.reading_history || []
+          };
+        });
         return res.json(mapped);
       }
     } catch (err) {
@@ -475,29 +500,74 @@ app.get('/api/admin/users', async (req: Request, res: Response) => {
 
 app.put('/api/admin/users/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { role, college, course } = req.body;
+  const { role, userType, college, course } = req.body;
 
-  if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const isSupabaseConfigured = Boolean(
+    supabaseUrl &&
+    supabaseKey &&
+    supabaseUrl.startsWith('http') &&
+    !supabaseUrl.includes('your-project-ref')
+  );
+
+  if (isSupabaseConfigured) {
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+      const supabaseAdmin = createClient(supabaseUrl!, supabaseKey!);
       const updates: any = {};
       if (role) updates.role = role;
+      if (userType) updates.user_type = userType;
       if (college) updates.college = college;
       if (course) updates.course_program = course;
-      await supabase.from('users').update(updates).eq('id', id);
-    } catch (err) {
-      console.warn('Could not update user in Supabase:', err);
+
+      // 1. Try update by id
+      let { data, error } = await supabaseAdmin.from('users').update(updates).eq('id', id).select();
+
+      // 2. Try update by user_id
+      if (error || !data || data.length === 0) {
+        const res2 = await supabaseAdmin.from('users').update(updates).eq('user_id', id).select();
+        if (res2.data && res2.data.length > 0) {
+          data = res2.data;
+          error = null;
+        }
+      }
+
+      // 3. Try update by email if id is email or found in usersDB
+      const matched = usersDB.find(u => u.userID === id || (u as any).id === id || u.email === id);
+      const emailToMatch = matched?.email || (id.includes('@') ? id : undefined);
+      if ((error || !data || data.length === 0) && emailToMatch) {
+        const res3 = await supabaseAdmin.from('users').update(updates).eq('email', emailToMatch).select();
+        if (res3.data && res3.data.length > 0) {
+          data = res3.data;
+          error = null;
+        }
+      }
+
+      // 4. If error (e.g. check constraint on role), fallback to student_faculty with user_type
+      if (error) {
+        console.warn('Backend Supabase user update warning:', error.message);
+        if (updates.role === 'faculty') {
+          updates.role = 'student_faculty';
+          await supabaseAdmin.from('users').update(updates).eq('id', id);
+          if (emailToMatch) {
+            await supabaseAdmin.from('users').update(updates).eq('email', emailToMatch);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('Could not update user in Supabase:', err.message);
     }
   }
 
-  const user = usersDB.find(u => u.userID === id);
+  const user = usersDB.find(u => u.userID === id || (u as any).id === id || u.email === id);
   if (user) {
     if (role) user.role = role;
+    if (userType) user.userType = userType;
     if (college) user.college = college;
     if (course) user.course = course;
   }
-  res.json({ message: 'User role updated successfully.' });
+  res.json({ message: 'User role updated successfully.', user });
 });
 
 // System Settings Management

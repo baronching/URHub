@@ -145,6 +145,58 @@ async function runSecurityTests() {
     assert(false, 'AI guardrail test failed: ' + e.message);
   }
 
+  // TEST 11: Real-time User Role Mutation & Faculty Escalation
+  try {
+    const initialUsersRes = await fetch(`${BASE}/api/admin/users`);
+    const initialUsersList = await initialUsersRes.json();
+    const testTarget = initialUsersList.find((u: any) => u.email === 'sambag@udm.edu.ph') || initialUsersList[0];
+    const targetId = testTarget?.userID || 'USR-UDM-001';
+    const previousType = testTarget?.userType || 'Student';
+
+    // Test updating user to Faculty_Admin
+    const updateRes = await fetch(`${BASE}/api/admin/users/${targetId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'student_faculty', userType: 'Faculty_Admin' })
+    });
+    assert(updateRes.status === 200, 'User Role Update Endpoint: Successfully accepts role and userType mutations');
+
+    // Verify it reflects in the user directory
+    const usersRes = await fetch(`${BASE}/api/admin/users`);
+    const usersList = await usersRes.json();
+    const updatedUser = usersList.find((u: any) => u.userID === targetId);
+    assert(updatedUser && updatedUser.userType === 'Faculty_Admin', 'User Role Reflection: userType correctly persists as Faculty_Admin in Supabase & memory');
+  } catch (e: any) {
+    assert(false, 'Role update test failed: ' + e.message);
+  }
+
+  // TEST 12: Verify Faculty Research Submission Permissions
+  try {
+    // Silvia Ambag (CED Faculty) submitting for CED should be allowed
+    const validFacultySubmission = await fetch(`${BASE}/api/submissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Pedagogical Evaluation of Blended Learning Models in UDM College of Education',
+        abstract: 'An empirical investigation assessing blended learning effectiveness among teacher candidates in Universidad de Manila College of Education.',
+        department: 'CED',
+        course: 'Doctor of Educational Management',
+        year: 2026,
+        authors: ['Dr. Silvia Ambag'],
+        keywords: ['Blended Learning', 'Education', 'UDM CED'],
+        submittedBy: 'feebc70e-67bb-4924-ae50-bd7befb1b384',
+        submitterName: 'SILVIA AMBAG',
+        submitterEmail: 'sambag@udm.edu.ph',
+        submitterRole: 'student_faculty',
+        submitterUserType: 'Faculty_Admin',
+        submitterCollege: 'CED'
+      })
+    });
+    assert(validFacultySubmission.status === 201, 'Faculty Access Enforcement: Permits research submission by Faculty/Admin for their registered college');
+  } catch (e: any) {
+    assert(false, 'Faculty submission test failed: ' + e.message);
+  }
+
   console.log(`\n====================================================`);
   console.log(`   Security Summary: ${passed} Passed, ${failed} Failed`);
   console.log(`====================================================\n`);
