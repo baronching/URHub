@@ -3,12 +3,14 @@ import { BookOpen, Sparkles, FilePlus, Building2, ShieldCheck, GraduationCap } f
 
 interface HeroBannerProps {
   totalPapers: number;
+  canSubmit?: boolean;
   onOpenSubmission: () => void;
   onExploreClick: () => void;
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({
   totalPapers,
+  canSubmit = false,
   onOpenSubmission,
   onExploreClick,
 }) => {
@@ -66,13 +68,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <span>Explore Research Archive</span>
           </button>
 
-          <button
-            onClick={onOpenSubmission}
-            className="px-5 py-3 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs sm:text-sm backdrop-blur-sm flex items-center space-x-2 transition-all transform hover:-translate-y-0.5"
-          >
-            <FilePlus className="w-4 h-4 text-[#c9a84c]" />
-            <span>Submit Research Paper</span>
-          </button>
+          {canSubmit && (
+            <button
+              onClick={onOpenSubmission}
+              className="px-5 py-3 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs sm:text-sm backdrop-blur-sm flex items-center space-x-2 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            >
+              <FilePlus className="w-4 h-4 text-[#c9a84c]" />
+              <span>Submit Research Paper</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

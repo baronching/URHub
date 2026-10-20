@@ -12,52 +12,28 @@
     <meta name="twitter:card" content="summary_large_image" />
     <script>
       // Suppress Vite HMR WebSocket connection errors in iframe / proxy environments
-      (function () {
-        var isWsError = function (str) {
-          if (!str) return false;
-          var s = String(str).toLowerCase();
-          return s.indexOf('websocket') !== -1 || s.indexOf('failed to connect to websocket') !== -1 || s.indexOf('closed without opened') !== -1 || s.indexOf('[vite]') !== -1;
-        };
-
-        var origError = console.error;
-        console.error = function () {
-          var text = Array.prototype.slice.call(arguments).map(function (a) {
-            return String(a && a.message ? a.message : a);
-          }).join(' ');
-          if (isWsError(text)) return;
-          origError.apply(console, arguments);
-        };
-
-        var origWarn = console.warn;
-        console.warn = function () {
-          var text = Array.prototype.slice.call(arguments).map(function (a) {
-            return String(a && a.message ? a.message : a);
-          }).join(' ');
-          if (isWsError(text)) return;
-          origWarn.apply(console, arguments);
-        };
-
-        window.onerror = function (msg, url, line, col, error) {
-          var text = String(msg || '') + ' ' + String(error || '');
-          if (isWsError(text)) return true;
-        };
-
-        window.addEventListener('unhandledrejection', function (e) {
-          var reason = e.reason ? (e.reason.message || String(e.reason)) : '';
-          if (isWsError(reason)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-          }
-        }, true);
-
-        window.addEventListener('error', function (e) {
-          var msg = (e.message || '') + ' ' + (e.error ? (e.error.message || String(e.error)) : '');
-          if (isWsError(msg)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-          }
-        }, true);
-      })();
+      window.addEventListener('unhandledrejection', function (e) {
+        var reason = e.reason ? (e.reason.message || String(e.reason)) : '';
+        if (
+          reason.indexOf('WebSocket') !== -1 ||
+          reason.indexOf('failed to connect to websocket') !== -1 ||
+          reason.indexOf('closed without opened') !== -1
+        ) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      });
+      window.addEventListener('error', function (e) {
+        var msg = e.message || '';
+        if (
+          msg.indexOf('WebSocket') !== -1 ||
+          msg.indexOf('failed to connect to websocket') !== -1 ||
+          msg.indexOf('closed without opened') !== -1
+        ) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      });
     </script>
   </head>
   <body>

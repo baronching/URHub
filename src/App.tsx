@@ -32,6 +32,7 @@ import {
   logoutUserWithSupabase
 } from './services/supabaseService';
 import { calculateIDF, getResearchTokens, scoreSearchRelevance, generateHybridRecommendations } from './utils/mlEngine';
+import { canSubmitResearch, isUrelia } from './utils/userUtils';
 import { INITIAL_USERS, INITIAL_RESEARCH, INITIAL_SUBMISSIONS } from './data/mockDatabase';
 
 export default function App() {
@@ -71,10 +72,12 @@ export default function App() {
     sortBy: 'relevance'
   });
 
-  // Protect Admin tabs if user is not authenticated or not an admin
+  // Protect URELIA-exclusive tabs (Review Queue, Analytics & Reports, User Management)
   useEffect(() => {
-    if (!currentUser && (activeTab === 'admin_review' || activeTab === 'analytics' || activeTab === 'super_admin')) {
-      setActiveTab('archive');
+    if (activeTab === 'admin_review' || activeTab === 'analytics' || activeTab === 'super_admin') {
+      if (!isUrelia(currentUser)) {
+        setActiveTab('archive');
+      }
     }
   }, [currentUser, activeTab]);
 
@@ -88,11 +91,35 @@ export default function App() {
   const handleOpenSubmissionModal = () => {
     if (!currentUser) {
       setShowAuthModal(true);
-      triggerToast('Please log in with your UDM account to submit research papers.', 'error');
-    } else {
-      setShowSubmissionModal(true);
+      triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
+      return;
     }
+    if (!canSubmitResearch(currentUser)) {
+      triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
+      return;
+    }
+    setShowSubmissionModal(true);
   };
+
+  // Hard-block URL hash and state tampering attempts for research submission
+  useEffect(() => {
+    const handleUrlOrHash = () => {
+      const hash = window.location.hash.toLowerCase();
+      if (hash === '#submit' || hash === '#submission' || hash === '#new-submission') {
+        window.history.replaceState(null, '', window.location.pathname);
+        if (!canSubmitResearch(currentUser)) {
+          setShowSubmissionModal(false);
+          triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
+        } else {
+          setShowSubmissionModal(true);
+        }
+      }
+    };
+
+    handleUrlOrHash();
+    window.addEventListener('hashchange', handleUrlOrHash);
+    return () => window.removeEventListener('hashchange', handleUrlOrHash);
+  }, [currentUser]);
 
   // 1. Initialize & Subscribe to live Supabase database & Auth
   useEffect(() => {
@@ -466,6 +493,7 @@ export default function App() {
             {/* Homepage Hero Section with UDM facade image & #1a4731 dark green overlay */}
             <HeroBanner
               totalPapers={rawResearchList.length}
+              canSubmit={canSubmitResearch(currentUser)}
               onOpenSubmission={handleOpenSubmissionModal}
               onExploreClick={() => {
                 const searchEl = document.getElementById('search-filter-section');
@@ -556,6 +584,11 @@ export default function App() {
         )}
 
         {/* UN Sustainable Development Goals (SDG) Alignment Section */}
+        {activeTab === 'sdgs' && (
+          <div className="space-y-6">
+            <SDGSection />
+          </div>
+        )}
         {activeTab === 'archive' && <SDGSection />}
       </main>
 
@@ -571,7 +604,7 @@ export default function App() {
         onOpenAuthModal={() => setShowAuthModal(true)}
       />
 
-      {showSubmissionModal && (
+      {showSubmissionModal && canSubmitResearch(currentUser) && (
         <SubmissionFormModal
           currentUser={currentUser}
           onClose={() => setShowSubmissionModal(false)}
@@ -589,10 +622,10 @@ export default function App() {
             try {
               localStorage.setItem('udm_active_user', JSON.stringify(user));
             } catch {}
-            if (user.role === 'admin') {
+            if (isUrelia(user)) {
               setActiveTab('admin_review');
-            } else if (user.role === 'super_admin') {
-              setActiveTab('super_admin');
+            } else {
+              setActiveTab('archive');
             }
             triggerToast(`Welcome back, ${user.name}!`);
           }}

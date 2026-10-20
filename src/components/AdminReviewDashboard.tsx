@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Submission, AccessRequest, UDM_COLLEGES } from '../types';
+import { getUserRoleDisplayLabel } from '../utils/userUtils';
 import {
   CheckSquare,
   CheckCircle2,
@@ -240,7 +241,7 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                     <span>•</span>
                     <span>Email: <strong>{req.userEmail}</strong></span>
                     <span>•</span>
-                    <span>Role/Type: <strong>{req.userRoleOrType || 'Student / Faculty'}</strong></span>
+                    <span>Role: <strong>{getUserRoleDisplayLabel(req.userRoleOrType)}</strong></span>
                   </div>
 
                   {req.reviewNote && (

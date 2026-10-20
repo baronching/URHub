@@ -13,6 +13,7 @@ export const INITIAL_USERS: User[] = [
     email: 'jdelacruz@udm.edu.ph',
     password: 'Password123!',
     role: 'student_faculty',
+    userType: 'Student',
     college: 'CCS',
     course: 'BS in Computer Science',
     readingHistory: ['RES-CCS-2024-001', 'RES-CCS-2024-002', 'RES-CBM-2024-001']
@@ -22,7 +23,8 @@ export const INITIAL_USERS: User[] = [
     name: 'Prof. Maria Santos',
     email: 'msantos@udm.edu.ph',
     password: 'Password123!',
-    role: 'student_faculty',
+    role: 'admin',
+    userType: 'Faculty_Admin',
     college: 'CED',
     course: 'Bachelor of Secondary Education',
     readingHistory: ['RES-CED-2024-001', 'RES-CAS-2024-001']
@@ -33,6 +35,7 @@ export const INITIAL_USERS: User[] = [
     email: 'areyes.urelia@udm.edu.ph',
     password: 'AdminPassword123!',
     role: 'admin',
+    userType: 'Faculty_Admin',
     college: 'CPPG',
     course: 'BS in Public Administration',
     readingHistory: ['RES-CPPG-2024-001', 'RES-CCJ-2024-001']
@@ -43,6 +46,7 @@ export const INITIAL_USERS: User[] = [
     email: 'sysadmin@udm.edu.ph',
     password: 'SuperAdmin123!',
     role: 'super_admin',
+    userType: 'Faculty_Admin',
     college: 'CCS',
     course: 'BS in Information Technology',
     readingHistory: []

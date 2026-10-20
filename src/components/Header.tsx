@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User } from '../types';
-import { getUserRoleDisplayLabel, formatUserDisplayName } from '../utils/userUtils';
+import { getUserRoleDisplayLabel, formatUserDisplayName, canSubmitResearch, isUrelia } from '../utils/userUtils';
 import { 
   ShieldCheck, 
   User as UserIcon, 
@@ -13,7 +13,8 @@ import {
   CheckSquare,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
+  Globe
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -37,7 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const isAdminOrSuperAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const canSubmit = canSubmitResearch(currentUser);
+  const isUreliaUser = isUrelia(currentUser);
   const isDropdownTabActive = activeTab === 'analytics' || activeTab === 'super_admin';
 
   // Close dropdown on outside click
@@ -149,17 +151,32 @@ export const Header: React.FC<HeaderProps> = ({
               <span>AI Recommendations</span>
             </button>
 
-            {/* Student/Faculty Submit button */}
+            {/* SDGs Section (Visible to everyone) */}
             <button
-              onClick={handleSubmissionClick}
-              className="px-2.5 py-1.5 xl:px-3 xl:py-2 rounded-lg text-xs font-bold bg-[#c9a84c] hover:bg-[#b8973b] text-[#1a4731] shadow-sm flex items-center space-x-1.5 whitespace-nowrap transition-colors select-none cursor-pointer"
+              onClick={() => handleTabClick('sdgs')}
+              className={`px-2.5 py-1.5 xl:px-3 xl:py-2 rounded-lg text-xs font-semibold flex items-center space-x-1.5 whitespace-nowrap transition-colors select-none cursor-pointer ${
+                activeTab === 'sdgs'
+                  ? 'bg-[#c9a84c] text-[#1a4731] font-bold shadow-sm'
+                  : 'text-white/90 hover:bg-white/10 hover:text-white'
+              }`}
             >
-              <FilePlus className="w-3.5 h-3.5 shrink-0" />
-              <span>Submit Research</span>
+              <Globe className="w-3.5 h-3.5 shrink-0" />
+              <span>SDGs</span>
             </button>
 
-            {/* Admin Review Tab */}
-            {isAdminOrSuperAdmin && (
+            {/* Faculty/Admin & URELIA Submit button */}
+            {canSubmit && (
+              <button
+                onClick={handleSubmissionClick}
+                className="px-2.5 py-1.5 xl:px-3 xl:py-2 rounded-lg text-xs font-bold bg-[#c9a84c] hover:bg-[#b8973b] text-[#1a4731] shadow-sm flex items-center space-x-1.5 whitespace-nowrap transition-colors select-none cursor-pointer"
+              >
+                <FilePlus className="w-3.5 h-3.5 shrink-0" />
+                <span>Submit Research</span>
+              </button>
+            )}
+
+            {/* URELIA Office Review Queue */}
+            {isUreliaUser && (
               <button
                 onClick={() => handleTabClick('admin_review')}
                 className={`px-2.5 py-1.5 xl:px-3 xl:py-2 rounded-lg text-xs font-semibold flex items-center space-x-1.5 whitespace-nowrap transition-colors select-none cursor-pointer ${
@@ -173,8 +190,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Admin Tools Dropdown (Analytics & Reports, System Admin) */}
-            {isAdminOrSuperAdmin && (
+            {/* URELIA Office Management Dropdown (Analytics & Reports, User Management) */}
+            {isUreliaUser && (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setAdminDropdownOpen(!adminDropdownOpen)}
@@ -210,22 +227,20 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
                     </button>
 
-                    {currentUser?.role === 'super_admin' && (
-                      <button
-                        onClick={() => handleTabClick('super_admin')}
-                        className={`w-full text-left px-3.5 py-2 text-xs flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                          activeTab === 'super_admin'
-                            ? 'bg-[#c9a84c] text-[#1a4731] font-bold'
-                            : 'text-white/90 hover:bg-white/10 hover:text-white'
-                        }`}
-                      >
-                        <Settings className="w-4 h-4 shrink-0" />
-                        <div className="flex flex-col">
-                          <span className="font-semibold leading-tight">System Admin</span>
-                          <span className="text-[10px] opacity-75">User roles & permissions</span>
-                        </div>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleTabClick('super_admin')}
+                      className={`w-full text-left px-3.5 py-2 text-xs flex items-center space-x-2.5 transition-colors cursor-pointer ${
+                        activeTab === 'super_admin'
+                          ? 'bg-[#c9a84c] text-[#1a4731] font-bold'
+                          : 'text-white/90 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <Settings className="w-4 h-4 shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="font-semibold leading-tight">User Management</span>
+                        <span className="text-[10px] opacity-75">User roles & permissions</span>
+                      </div>
+                    </button>
                   </div>
                 )}
               </div>
@@ -245,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       {formatUserDisplayName(currentUser.name)}
                     </span>
-                    <span className="text-[10px] text-[#c9a84c] font-mono capitalize flex items-center justify-end space-x-1">
+                    <span className="text-[10px] text-[#c9a84c] font-mono flex items-center justify-end space-x-1">
                       <ShieldCheck className="w-3 h-3 text-[#c9a84c] shrink-0" />
                       <span className="whitespace-nowrap">
                         {getUserRoleDisplayLabel(currentUser)}
@@ -311,14 +326,28 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               <button
-                onClick={handleSubmissionClick}
-                className="w-full px-4 py-2.5 rounded-lg text-xs font-bold bg-[#c9a84c] text-[#1a4731] flex items-center space-x-2 cursor-pointer"
+                onClick={() => handleTabClick('sdgs')}
+                className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
+                  activeTab === 'sdgs'
+                    ? 'bg-[#c9a84c] text-[#1a4731] font-bold'
+                    : 'bg-white/5 text-white hover:bg-white/10'
+                }`}
               >
-                <FilePlus className="w-4 h-4" />
-                <span>Submit Research Paper</span>
+                <Globe className="w-4 h-4" />
+                <span>SDGs</span>
               </button>
 
-              {isAdminOrSuperAdmin && (
+              {canSubmit && (
+                <button
+                  onClick={handleSubmissionClick}
+                  className="w-full px-4 py-2.5 rounded-lg text-xs font-bold bg-[#c9a84c] text-[#1a4731] flex items-center space-x-2 cursor-pointer"
+                >
+                  <FilePlus className="w-4 h-4" />
+                  <span>Submit Research Paper</span>
+                </button>
+              )}
+
+              {isUreliaUser && (
                 <button
                   onClick={() => handleTabClick('admin_review')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -332,7 +361,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {isAdminOrSuperAdmin && (
+              {isUreliaUser && (
                 <button
                   onClick={() => handleTabClick('analytics')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -346,7 +375,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {currentUser?.role === 'super_admin' && (
+              {isUreliaUser && (
                 <button
                   onClick={() => handleTabClick('super_admin')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -356,7 +385,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   <Settings className="w-4 h-4" />
-                  <span>System Admin</span>
+                  <span>User Management</span>
                 </button>
               )}
             </div>
@@ -369,7 +398,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-xs font-bold text-white">
                       {formatUserDisplayName(currentUser.name)}
                     </span>
-                    <span className="text-[10px] text-[#c9a84c] font-mono capitalize">
+                    <span className="text-[10px] text-[#c9a84c] font-mono">
                       {getUserRoleDisplayLabel(currentUser)}
                     </span>
                   </div>

@@ -302,6 +302,9 @@ app.post('/api/submissions', (req: Request, res: Response) => {
     submittedBy,
     submitterName,
     submitterEmail,
+    submitterRole,
+    submitterUserType,
+    submitterCollege,
     title,
     abstract,
     authors,
@@ -319,6 +322,32 @@ app.post('/api/submissions', (req: Request, res: Response) => {
   // Verify College constraint
   if (!UDM_COLLEGES.some(c => c.id === department)) {
     return res.status(400).json({ error: 'Invalid UDM College selected.' });
+  }
+
+  // 1. Resolve submitter profile from database or payload
+  const userInDb = usersDB.find(u => u.userID === submittedBy || (submitterEmail && u.email.toLowerCase() === submitterEmail.toLowerCase()));
+  const effectiveUserType = userInDb?.userType || submitterUserType;
+  const effectiveRole = userInDb?.role || submitterRole;
+  const effectiveCollege = userInDb?.college || submitterCollege;
+
+  const isUreliaUser = effectiveRole === 'super_admin' || effectiveRole === 'URELIA' || userInDb?.role === 'super_admin';
+  const isFacultyUser = !isUreliaUser && (effectiveUserType === 'Faculty_Admin' || effectiveRole === 'admin' || effectiveRole === 'Faculty/Admin' || effectiveRole === 'Faculty');
+  const isStudentUser = !isUreliaUser && !isFacultyUser;
+
+  // Hard block students and unauthenticated guests from submitting
+  if (isStudentUser) {
+    return res.status(403).json({
+      error: 'Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.'
+    });
+  }
+
+  // Enforce Faculty registered college lock
+  if (isFacultyUser && !isUreliaUser) {
+    if (effectiveCollege && department !== effectiveCollege) {
+      return res.status(403).json({
+        error: `Submission rejected: As a Faculty/Admin for ${effectiveCollege}, you are strictly prohibited from submitting papers for any other college (${department}).`
+      });
+    }
   }
 
   const newSubmissionID = `SUB-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
