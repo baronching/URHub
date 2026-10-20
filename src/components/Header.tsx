@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User } from '../types';
-import { getUserRoleDisplayLabel, formatUserDisplayName, isUreliaUser, canSubmitResearch } from '../utils/userUtils';
+import { getUserRoleDisplayLabel, formatUserDisplayName, isUrelia, canSubmitResearch } from '../utils/userUtils';
 import { 
   ShieldCheck, 
   User as UserIcon, 
@@ -37,8 +37,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const isUrelia = isUreliaUser(currentUser);
-  const canSubmit = canSubmitResearch(currentUser);
+  const isUreliaUser = isUrelia(currentUser);
+  const userCanSubmit = canSubmitResearch(currentUser);
   const isDropdownTabActive = activeTab === 'analytics' || activeTab === 'super_admin';
 
   // Close dropdown on outside click
@@ -150,8 +150,8 @@ export const Header: React.FC<HeaderProps> = ({
               <span>AI Recommendations</span>
             </button>
 
-            {/* Submit Research: Exclusively for Faculty/Admin and URELIA */}
-            {canSubmit && (
+            {/* Faculty/Admin & URELIA Submit button */}
+            {userCanSubmit && (
               <button
                 onClick={handleSubmissionClick}
                 className="px-2.5 py-1.5 xl:px-3 xl:py-2 rounded-lg text-xs font-bold bg-[#c9a84c] hover:bg-[#b8973b] text-[#1a4731] shadow-sm flex items-center space-x-1.5 whitespace-nowrap transition-colors select-none cursor-pointer"
@@ -161,8 +161,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Review Queue: Exclusively for URELIA */}
-            {isUrelia && (
+            {/* URELIA Review Queue Tab */}
+            {isUreliaUser && (
               <button
                 onClick={() => handleTabClick('admin_review')}
                 className={`px-2.5 py-1.5 xl:px-3 xl:py-2 rounded-lg text-xs font-semibold flex items-center space-x-1.5 whitespace-nowrap transition-colors select-none cursor-pointer ${
@@ -176,8 +176,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Management (Analytics & Reports, User Management): Exclusively for URELIA */}
-            {isUrelia && (
+            {/* URELIA Tools Dropdown (Analytics & Reports, User Management) */}
+            {isUreliaUser && (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setAdminDropdownOpen(!adminDropdownOpen)}
@@ -311,8 +311,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>AI Recommendations</span>
               </button>
 
-              {/* Submit Research: Exclusively for Faculty/Admin and URELIA */}
-              {canSubmit && (
+              {userCanSubmit && (
                 <button
                   onClick={handleSubmissionClick}
                   className="w-full px-4 py-2.5 rounded-lg text-xs font-bold bg-[#c9a84c] text-[#1a4731] flex items-center space-x-2 cursor-pointer"
@@ -322,8 +321,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {/* Review Queue: Exclusively for URELIA */}
-              {isUrelia && (
+              {isUreliaUser && (
                 <button
                   onClick={() => handleTabClick('admin_review')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -337,8 +335,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {/* Analytics & Reports: Exclusively for URELIA */}
-              {isUrelia && (
+              {isUreliaUser && (
                 <button
                   onClick={() => handleTabClick('analytics')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -352,8 +349,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {/* User Management: Exclusively for URELIA */}
-              {isUrelia && (
+              {isUreliaUser && (
                 <button
                   onClick={() => handleTabClick('super_admin')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${

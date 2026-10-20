@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Research, Submission, User, UserRole, SystemSettings, UDMCollege, AccessRequest } from '../types';
+import { Research, Submission, User, SystemSettings, UDMCollege, AccessRequest } from '../types';
 import {
   INITIAL_RESEARCH,
   INITIAL_USERS,
@@ -246,34 +246,18 @@ export function subscribeToUsers(callback: (users: User[]) => void) {
   const fetchUsers = async () => {
     const { data, error } = await supabase.from('users').select('*');
     if (!error && data && data.length > 0) {
-      const mapped: User[] = data.map(u => {
-        let detectedType: 'Student' | 'Faculty_Admin' = 'Student';
-        const rawType = String(u.user_type || '').toLowerCase();
-        const rawRole = String(u.role || '').toLowerCase();
-        if (
-          rawType.includes('faculty') ||
-          rawRole === 'faculty' ||
-          rawRole === 'faculty_admin' ||
-          rawRole === 'admin' ||
-          rawRole === 'super_admin' ||
-          rawType.includes('admin')
-        ) {
-          detectedType = 'Faculty_Admin';
-        }
-
-        return {
-          userID: u.id || u.user_id,
-          name: u.name || u.full_name,
-          fullName: u.full_name || u.name,
-          email: u.email,
-          role: u.role || (detectedType === 'Faculty_Admin' ? 'student_faculty' : 'student_faculty'),
-          userType: (u.user_type as any) || detectedType,
-          college: u.college as UDMCollege,
-          idNumber: u.id_number,
-          courseProgram: u.course_program,
-          readingHistory: u.reading_history || []
-        };
-      });
+      const mapped: User[] = data.map(u => ({
+        userID: u.id || u.user_id,
+        name: u.name || u.full_name,
+        fullName: u.full_name || u.name,
+        email: u.email,
+        role: u.role,
+        userType: u.user_type,
+        college: u.college as UDMCollege,
+        idNumber: u.id_number,
+        courseProgram: u.course_program,
+        readingHistory: u.reading_history || []
+      }));
       inMemoryUsers = mapped;
       callback(mapped);
     }
@@ -504,86 +488,12 @@ export async function saveUser(user: User): Promise<void> {
   }
 }
 
-export async function updateUserRole(
-  userID: string,
-  newRole: User['role'] | string,
-  newUserType?: User['userType']
-): Promise<void> {
-  const resolvedUserType = newUserType || (
-    newRole === 'super_admin' ? 'Faculty_Admin' : (
-      String(newRole).toLowerCase().includes('faculty') ? 'Faculty_Admin' : undefined
-    )
-  );
-
-  inMemoryUsers = inMemoryUsers.map(u => {
-    if (u.userID === userID || (u as any).id === userID || (u as any).user_id === userID || u.email === userID) {
-      return {
-        ...u,
-        role: newRole as UserRole,
-        userType: resolvedUserType !== undefined ? resolvedUserType : u.userType
-      };
-    }
-    return u;
-  });
+export async function updateUserRole(userID: string, newRole: User['role']): Promise<void> {
+  inMemoryUsers = inMemoryUsers.map(u => u.userID === userID ? { ...u, role: newRole } : u);
   notifyUsers();
 
   if (isSupabaseConfigured) {
-    try {
-      const updates: Record<string, any> = {};
-      if (newRole) updates.role = newRole;
-      if (resolvedUserType) updates.user_type = resolvedUserType;
-
-      const targetUser = inMemoryUsers.find(
-        u => u.userID === userID || (u as any).id === userID || (u as any).user_id === userID || u.email === userID
-      );
-
-      // 1. Try update by id = userID
-      let { data, error } = await supabase
-        .from('users')
-        .update(updates)
-        .eq('id', userID)
-        .select();
-
-      // 2. If no rows affected or error, try user_id = userID
-      if (error || !data || data.length === 0) {
-        const res2 = await supabase
-          .from('users')
-          .update(updates)
-          .eq('user_id', userID)
-          .select();
-        if (res2.data && res2.data.length > 0) {
-          data = res2.data;
-          error = null;
-        }
-      }
-
-      // 3. If still no rows affected and email is present, try email
-      if ((error || !data || data.length === 0) && targetUser?.email) {
-        const res3 = await supabase
-          .from('users')
-          .update(updates)
-          .eq('email', targetUser.email)
-          .select();
-        if (res3.data && res3.data.length > 0) {
-          data = res3.data;
-          error = null;
-        }
-      }
-
-      // 4. If error happened (e.g. Postgres check constraint on role enum), fallback to role: 'student_faculty'
-      if (error) {
-        console.warn('Supabase role update attempt warning:', error.message);
-        if (updates.role === 'faculty') {
-          updates.role = 'student_faculty';
-          await supabase.from('users').update(updates).eq('id', userID);
-          if (targetUser?.email) {
-            await supabase.from('users').update(updates).eq('email', targetUser.email);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Failed to update user role in Supabase:', err);
-    }
+    await supabase.from('users').update({ role: newRole }).eq('id', userID);
   }
 }
 
@@ -674,7 +584,7 @@ export interface RegisterPayload {
   email: string;
   password?: string;
   confirmPassword?: string;
-  role: 'Student' | 'Faculty_Admin';
+  role: 'Student' | 'Faculty' | 'Faculty_Admin';
   college: UDMCollege;
   idNumber: string;
   courseProgram: string;
@@ -728,116 +638,145 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<U
   return newUser;
 }
 
-export async function loginUserWithSupabase(identifier: string, password?: string): Promise<User> {
-  const cleanInput = (identifier || '').trim();
-  const cleanLower = cleanInput.toLowerCase();
-
-  let candidate: any = null;
-
-  // 1. Search in Supabase 'users' table across email, username, id_number, or id
+export async function getAllDatabaseUsers(): Promise<User[]> {
   if (isSupabaseConfigured) {
     try {
-      const { data: allUsers, error: fetchErr } = await supabase.from('users').select('*');
-      if (!fetchErr && allUsers && allUsers.length > 0) {
-        candidate = allUsers.find((u: any) =>
-          (u.email && u.email.toLowerCase() === cleanLower) ||
-          (u.email && u.email.toLowerCase().split('@')[0] === cleanLower) ||
-          (u.id_number && u.id_number.toLowerCase() === cleanLower) ||
-          (u.id && String(u.id).toLowerCase() === cleanLower) ||
-          (u.name && u.name.toLowerCase() === cleanLower) ||
-          (u.full_name && u.full_name.toLowerCase() === cleanLower)
-        );
+      const { data, error } = await supabase.from('users').select('*');
+      if (!error && data && data.length > 0) {
+        return data.map(u => ({
+          userID: u.id || u.user_id,
+          name: u.name || u.full_name || u.email?.split('@')[0],
+          fullName: u.full_name || u.name,
+          email: u.email,
+          role: u.role,
+          userType: u.user_type,
+          college: u.college as UDMCollege,
+          idNumber: u.id_number,
+          courseProgram: u.course_program,
+          readingHistory: u.reading_history || []
+        }));
       }
     } catch (err) {
-      console.warn('Supabase candidate lookup error:', err);
+      console.warn('Could not query Supabase users:', err);
     }
   }
+  return inMemoryUsers.length > 0 ? inMemoryUsers : INITIAL_USERS;
+}
 
-  // 2. Check in-memory / mock database if not found in Supabase
-  if (!candidate) {
-    const memoryMatch = inMemoryUsers.find(u =>
-      u.email.toLowerCase() === cleanLower ||
-      u.email.toLowerCase().split('@')[0] === cleanLower ||
-      (u.idNumber && u.idNumber.toLowerCase() === cleanLower) ||
-      u.userID.toLowerCase() === cleanLower ||
-      u.name.toLowerCase() === cleanLower
-    );
-    if (memoryMatch) {
-      candidate = {
-        id: memoryMatch.userID,
-        name: memoryMatch.name,
-        full_name: memoryMatch.fullName || memoryMatch.name,
-        email: memoryMatch.email,
-        role: memoryMatch.role,
-        user_type: memoryMatch.userType,
-        college: memoryMatch.college,
-        id_number: memoryMatch.idNumber,
-        course_program: memoryMatch.courseProgram,
-        reading_history: memoryMatch.readingHistory
-      };
-    }
-  }
+export async function loginUserWithSupabase(identifier: string, password?: string): Promise<User> {
+  const raw = (identifier || '').trim();
+  const clean = raw.toLowerCase();
+  const candidateEmail = clean.includes('@') ? clean : `${clean}@udm.edu.ph`;
 
-  const targetEmail = candidate ? candidate.email : (cleanLower.includes('@') ? cleanLower : `${cleanLower}@udm.edu.ph`);
-
-  // 3. Attempt Supabase Auth signInWithPassword if configured and password is provided
-  if (isSupabaseConfigured && password) {
+  // 1. Try Supabase Auth first if password is provided
+  if (isSupabaseConfigured && password && clean.includes('@')) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: targetEmail,
+        email: candidateEmail,
         password
       });
 
-      if (error) {
-        const isEmailNotConfirmed = error.message.toLowerCase().includes('email not confirmed');
-        if (isEmailNotConfirmed) {
-          // Gracefully bypass unconfirmed email for verified institutional accounts in the database
-          console.info('Supabase email confirmation pending: authenticated via institutional database record.');
-        } else if (!candidate) {
-          throw new Error(error.message);
-        }
-      } else if (data.user) {
-        const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).single();
-        if (profile) {
-          candidate = profile;
-        }
+      if (!error && data?.user) {
+        // Find user in Supabase table
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .or(`id.eq.${data.user.id},email.ilike.${candidateEmail}`)
+          .maybeSingle();
+
+        const user: User = {
+          userID: profile?.id || data.user.id,
+          name: profile?.name || profile?.full_name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
+          fullName: profile?.full_name || profile?.name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
+          email: profile?.email || data.user.email || candidateEmail,
+          role: profile?.role || 'student_faculty',
+          userType: profile?.user_type || data.user.user_metadata?.user_type || 'Student',
+          college: profile?.college || data.user.user_metadata?.college || 'CCS',
+          idNumber: profile?.id_number || data.user.user_metadata?.id_number || '',
+          courseProgram: profile?.course_program || data.user.user_metadata?.course_program || '',
+          readingHistory: profile?.reading_history || []
+        };
+        try {
+          localStorage.setItem('udm_active_user', JSON.stringify(user));
+        } catch {}
+        return user;
       }
-    } catch (err: any) {
-      if (err.message && !err.message.toLowerCase().includes('email not confirmed') && !candidate) {
-        throw err;
-      }
+    } catch (authErr) {
+      console.warn('Supabase Auth signInWithPassword error, falling back to database verification:', authErr);
     }
   }
 
-  // 4. Return the candidate profile
-  if (candidate) {
-    return {
-      userID: candidate.id,
-      name: candidate.name || candidate.full_name || candidate.email.split('@')[0],
-      fullName: candidate.full_name || candidate.name,
-      email: candidate.email,
-      role: candidate.role || 'student_faculty',
-      userType: candidate.user_type || 'Student',
-      college: candidate.college || 'CCS',
-      idNumber: candidate.id_number || '',
-      courseProgram: candidate.course_program || '',
-      readingHistory: candidate.reading_history || []
-    };
+  // 2. Query Supabase users table directly by candidateEmail, id_number, or exact id
+  if (isSupabaseConfigured) {
+    try {
+      const { data: profile, error: dbErr } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.ilike.${candidateEmail},id_number.eq.${raw},id.eq.${raw}`)
+        .maybeSingle();
+
+      if (!dbErr && profile) {
+        const user: User = {
+          userID: profile.id,
+          name: profile.name || profile.full_name || profile.email?.split('@')[0] || raw,
+          fullName: profile.full_name || profile.name,
+          email: profile.email || candidateEmail,
+          role: profile.role || 'student_faculty',
+          userType: profile.user_type || 'Student',
+          college: profile.college || 'CCS',
+          idNumber: profile.id_number || '',
+          courseProgram: profile.course_program || '',
+          readingHistory: profile.reading_history || []
+        };
+        try {
+          localStorage.setItem('udm_active_user', JSON.stringify(user));
+        } catch {}
+        return user;
+      }
+    } catch (dbErr) {
+      console.warn('Supabase users query error:', dbErr);
+    }
   }
 
-  // 5. Fallback auto-provision if official UDM email domain
-  const dummy: User = {
-    userID: 'usr_' + Date.now(),
-    name: targetEmail.split('@')[0].toUpperCase(),
-    fullName: targetEmail.split('@')[0].toUpperCase(),
-    email: targetEmail,
-    role: targetEmail.includes('admin') ? 'admin' : 'student_faculty',
-    userType: 'Student',
-    college: 'CCS',
-    readingHistory: []
-  };
-  await saveUser(dummy);
-  return dummy;
+  // 3. Fallback to in-memory users / initial seed users
+  const found = inMemoryUsers.find(u => 
+    u.email.toLowerCase() === candidateEmail ||
+    u.email.toLowerCase() === clean ||
+    (u.idNumber && u.idNumber.toLowerCase() === raw.toLowerCase()) ||
+    u.userID === raw
+  ) || INITIAL_USERS.find(u => 
+    u.email.toLowerCase() === candidateEmail ||
+    u.email.toLowerCase() === clean ||
+    u.userID === raw
+  );
+
+  if (found) {
+    try {
+      localStorage.setItem('udm_active_user', JSON.stringify(found));
+    } catch {}
+    return found;
+  }
+
+  // 4. If valid UDM email or username entered, auto-provision and save profile in Supabase
+  if (candidateEmail.endsWith('@udm.edu.ph')) {
+    const newUser: User = {
+      userID: 'usr_' + Date.now(),
+      name: candidateEmail.split('@')[0].toUpperCase(),
+      fullName: candidateEmail.split('@')[0].toUpperCase(),
+      email: candidateEmail,
+      role: candidateEmail.includes('admin') ? 'admin' : 'student_faculty',
+      userType: 'Student',
+      college: 'CCS',
+      readingHistory: []
+    };
+    await saveUser(newUser);
+    try {
+      localStorage.setItem('udm_active_user', JSON.stringify(newUser));
+    } catch {}
+    return newUser;
+  }
+
+  throw new Error(`Account "${raw}" not found. Please register your account with your official @udm.edu.ph credentials.`);
 }
 
 export async function logoutUserWithSupabase(): Promise<void> {

@@ -72,7 +72,7 @@ export const UDM_COLLEGES: {
   }
 ];
 
-export type UserRole = 'student_faculty' | 'admin' | 'super_admin' | 'faculty' | 'Faculty_Admin' | 'URELIA';
+export type UserRole = 'student_faculty' | 'admin' | 'super_admin';
 
 export interface User {
   userID: string;
@@ -81,7 +81,7 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
-  userType?: 'Student' | 'Faculty_Admin' | 'Faculty' | string;
+  userType?: 'Student' | 'Faculty' | 'Faculty_Admin';
   college?: UDMCollege;
   idNumber?: string;
   courseProgram?: string;

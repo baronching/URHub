@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UDMCollege, UDM_COLLEGES, User, Submission } from '../types';
 import { createSubmission } from '../services/supabaseService';
-import { isUreliaUser, canSubmitResearch } from '../utils/userUtils';
+import { isUrelia, isFacultyAdmin, canSubmitResearch } from '../utils/userUtils';
 import {
   X,
   FilePlus,
@@ -33,24 +33,29 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
   onClose,
   onSubmitSuccess
 }) => {
-  const isUrelia = isUreliaUser(currentUser);
-  const isAuthorized = canSubmitResearch(currentUser);
+  const isFaculty = isFacultyAdmin(currentUser);
+  const userCanSubmit = canSubmitResearch(currentUser);
 
-  // Strictly prevent Students and Guests from accessing or rendering this modal
+  // Hard-block unauthorized callers (e.g. Students or Guests)
   useEffect(() => {
-    if (!isAuthorized) {
+    if (!currentUser || !canSubmitResearch(currentUser)) {
       onClose();
     }
-  }, [isAuthorized, onClose]);
+  }, [currentUser, onClose]);
+
+  // Initial college and courses
+  const facultyCollege: UDMCollege = currentUser?.college || 'CCS';
+  const initialDepartment: UDMCollege = isFaculty ? facultyCollege : (currentUser?.college || 'CCS');
+  const initialCollegeObj = UDM_COLLEGES.find(c => c.id === initialDepartment);
+  const initialCourse = currentUser?.course || initialCollegeObj?.courses[0] || UDM_COLLEGES[0].courses[0];
 
   const [step, setStep] = useState<number>(1);
   const [title, setTitle] = useState('');
-  const [authorCategory, setAuthorCategory] = useState<'Student' | 'Faculty_Admin'>('Faculty_Admin');
-  // Faculty/Admin is locked to their registered college; URELIA can select any
-  const [department, setDepartment] = useState<UDMCollege>(
-    isUrelia ? (currentUser?.college || 'CCS') : (currentUser?.college || 'CCS')
+  const [authorCategory, setAuthorCategory] = useState<'Student' | 'Faculty_Admin'>(
+    isFaculty ? 'Faculty_Admin' : 'Student'
   );
-  const [course, setCourse] = useState(currentUser?.course || UDM_COLLEGES.find(c => c.id === (currentUser?.college || 'CCS'))?.courses[0] || UDM_COLLEGES[0].courses[0]);
+  const [department, setDepartment] = useState<UDMCollege>(initialDepartment);
+  const [course, setCourse] = useState(initialCourse);
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [authors, setAuthors] = useState<string>(currentUser?.name || '');
   const [abstract, setAbstract] = useState('');
@@ -134,6 +139,7 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 
   // Handle department change -> update courses list
   const handleDepartmentChange = (col: UDMCollege) => {
+    if (isFaculty) return; // Permanently locked to registered college
     setDepartment(col);
     const found = UDM_COLLEGES.find(c => c.id === col);
     if (found && found.courses.length > 0) {
@@ -195,8 +201,10 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      if (!isAuthorized) {
-        throw new Error('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.');
+      if (isFaculty && currentUser?.college && department !== currentUser.college) {
+        throw new Error(
+          `Faculty/Admin members are strictly authorized to submit research only for their designated college (${currentUser.college}).`
+        );
       }
 
       const authorList = authors.split(',').map(a => a.trim()).filter(Boolean);
@@ -204,9 +212,6 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 
       const subId = `SUB-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
       const resId = `RES-SUB-${Date.now().toString().slice(-5)}`;
-
-      // Authoritative college: Faculty/Admin strictly uses registered college
-      const effectiveDepartment = isUrelia ? department : (currentUser?.college || department);
 
       const newSubmission: Submission = {
         submissionID: subId,
@@ -218,29 +223,28 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
         abstract: abstract.trim(),
         authors: authorList,
         keywords: keywordList,
-        department: effectiveDepartment,
+        department,
         course,
         year: year || new Date().getFullYear(),
         dateSubmitted: new Date().toISOString().split('T')[0],
         status: 'pending',
         pdfFileName: pdfFileName || 'research_manuscript.pdf',
-        authorCategory: 'Faculty_Admin'
+        authorCategory
       };
 
-      // Call backend API first to validate authoritative server-side RBAC
-      const apiRes = await fetch('/api/submissions', {
+      // Backend API validation first
+      const res = await fetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSubmission)
       });
 
-      if (!apiRes.ok) {
-        const errorData = await apiRes.json().catch(() => null);
-        throw new Error(errorData?.error || 'Research submission was rejected by the server.');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Server rejected the research submission.');
       }
 
       await createSubmission(newSubmission);
-
       onSubmitSuccess();
       onClose();
     } catch (err: any) {
@@ -249,10 +253,6 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
       setIsSubmitting(false);
     }
   };
-
-  if (!isAuthorized) {
-    return null;
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
@@ -354,10 +354,12 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
                       type="button"
                       onClick={() => {
                         setAuthorCategory(cls.id);
-                        if (cls.id === 'Faculty_Admin' && department !== 'FAC-ADM') {
-                          handleDepartmentChange('FAC-ADM');
-                        } else if (cls.id === 'Student' && department === 'FAC-ADM') {
-                          handleDepartmentChange('CCS');
+                        if (!isFaculty) {
+                          if (cls.id === 'Faculty_Admin' && department !== 'FAC-ADM') {
+                            handleDepartmentChange('FAC-ADM');
+                          } else if (cls.id === 'Student' && department === 'FAC-ADM') {
+                            handleDepartmentChange('CCS');
+                          }
                         }
                       }}
                       className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
@@ -375,28 +377,22 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span>UDM Academic or Institutional Unit *</span>
-                    {!isUrelia && (
-                      <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-bold flex items-center space-x-1">
-                        <Lock className="w-3 h-3 text-amber-700" />
-                        <span>Registered Unit</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      UDM College / Department *
+                    </label>
+                    {isFaculty && (
+                      <span className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 font-bold flex items-center space-x-1">
+                        <Lock className="w-3 h-3 text-amber-600" />
+                        <span>Locked to {currentUser?.college}</span>
                       </span>
                     )}
-                  </label>
+                  </div>
                   <select
-                    value={isUrelia ? department : (currentUser?.college || department)}
-                    onChange={e => {
-                      if (isUrelia) {
-                        handleDepartmentChange(e.target.value as UDMCollege);
-                      }
-                    }}
-                    disabled={!isUrelia}
-                    className={`w-full border rounded-lg px-4 py-3 text-sm focus:outline-none transition-all ${
-                      !isUrelia
-                        ? 'bg-slate-100 border-slate-300 text-slate-700 font-bold cursor-not-allowed opacity-90'
-                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#1a4731] cursor-pointer'
-                    }`}
+                    value={department}
+                    disabled={isFaculty}
+                    onChange={e => !isFaculty && handleDepartmentChange(e.target.value as UDMCollege)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-700 disabled:border-slate-300 font-medium"
                   >
                     {UDM_COLLEGES.map(c => (
                       <option key={c.id} value={c.id}>
@@ -404,9 +400,9 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
                       </option>
                     ))}
                   </select>
-                  {!isUrelia && (
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Faculty/Admin submissions are locked to your registered college ({currentUser?.college || 'CCS'}).
+                  {isFaculty && (
+                    <p className="text-[11px] text-slate-500 mt-1 italic">
+                      As College Admin for <strong>{currentUser?.college}</strong>, research submissions are permanently locked to your registered college.
                     </p>
                   )}
                 </div>

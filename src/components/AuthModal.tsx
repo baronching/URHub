@@ -104,22 +104,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
           yearLevel: userType === 'Student' ? yearLevel : undefined
         });
 
-        try {
-          localStorage.setItem('udm_active_user', JSON.stringify(registeredUser));
-        } catch {}
         onLoginSuccess(registeredUser);
         onClose();
       } else {
-        // Flexible login via Full Email, Username, or ID Number (bypasses unconfirmed email error)
+        // Supabase Auth Login
         const authenticatedUser = await loginUserWithSupabase(email, password);
-        try {
-          localStorage.setItem('udm_active_user', JSON.stringify(authenticatedUser));
-        } catch {}
         onLoginSuccess(authenticatedUser);
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please check your credentials or click an account below.');
+      setErrorMsg(err.message || 'Authentication failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -148,7 +142,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
           <button
             onClick={onClose}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors relative z-10 cursor-pointer"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors relative z-10"
           >
             <X className="w-5 h-5" />
           </button>
@@ -165,7 +159,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 setIsRegister(false);
                 setErrorMsg('');
               }}
-              className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer ${
+              className={`flex-1 py-2 rounded-lg transition-all text-center ${
                 !isRegister
                   ? 'bg-white text-[#1a4731] shadow-xs border border-slate-200 font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -179,7 +173,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 setIsRegister(true);
                 setErrorMsg('');
               }}
-              className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer ${
+              className={`flex-1 py-2 rounded-lg transition-all text-center ${
                 isRegister
                   ? 'bg-white text-[#1a4731] shadow-xs border border-slate-200 font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -196,7 +190,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
               <div className="leading-relaxed">{errorMsg}</div>
             </div>
           )}
-
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
@@ -224,9 +217,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
               <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                 <Mail className="w-3.5 h-3.5 text-[#1a4731]" />
                 <span>
-                  {isRegister
-                    ? 'UDM Institutional Email * (@udm.edu.ph)'
-                    : 'UDM Email, Username, or ID Number *'}
+                  {isRegister ? 'UDM Institutional Email * (@udm.edu.ph)' : 'UDM Email, Username, or Student/Faculty ID *'}
                 </span>
               </label>
               <input
@@ -237,11 +228,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 placeholder={isRegister ? 'yourname@udm.edu.ph' : 'e.g. blching@udm.edu.ph, blching, or 23-22-005'}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
               />
-              {!isRegister && (
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Supports your full @udm.edu.ph email, username, or Student/Faculty ID number.
-                </p>
-              )}
             </div>
 
             {/* Password */}
@@ -293,7 +279,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
                     >
                       <option value="Student">Student</option>
-                      <option value="Faculty_Admin">Faculty & Administration</option>
+                      <option value="Faculty_Admin">Faculty/Admin</option>
                     </select>
                   </div>
 
@@ -380,7 +366,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
             >
               <span>
                 {isLoading
-                  ? 'Authenticating with UDM Firebase Server...'
+                  ? 'Authenticating with UDM Single Sign-On...'
                   : isRegister
                   ? 'Create UDM Institutional Account'
                   : 'Sign In to UDM-ResearchHub'}

@@ -4,16 +4,12 @@ import { Eye, Download, FileText, Calendar, GraduationCap, ArrowUpRight } from '
 
 interface ResearchCardProps {
   research: Research;
-  isSelected?: boolean;
-  onToggleSelect?: (researchID: string, e: React.MouseEvent) => void;
   onSelect: (research: Research) => void;
   onDownloadAbstract: (research: Research, e: React.MouseEvent) => void;
 }
 
 export const ResearchCard: React.FC<ResearchCardProps> = ({
   research,
-  isSelected = false,
-  onToggleSelect,
   onSelect,
   onDownloadAbstract
 }) => {
@@ -22,35 +18,15 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
   return (
     <div
       onClick={() => onSelect(research)}
-      className={`group bg-white rounded-xl p-4 sm:p-5 md:p-6 border transition-all duration-200 flex flex-col justify-between cursor-pointer relative overflow-hidden ${
-        isSelected
-          ? 'border-[#1a4731] ring-2 ring-[#1a4731]/30 bg-emerald-50/20 shadow-md'
-          : 'border-slate-200 hover:border-[#1a4731]/40 shadow-sm hover:shadow-md'
-      }`}
+      className="group bg-white rounded-xl p-4 sm:p-5 md:p-6 border border-slate-200 hover:border-[#1a4731]/40 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between cursor-pointer relative overflow-hidden"
     >
       {/* Top accent bar */}
-      <div className={`absolute top-0 left-0 right-0 h-1 ${isSelected ? 'bg-[#c9a84c]' : 'bg-[#1a4731]'}`} />
+      <div className="absolute top-0 left-0 right-0 h-1 bg-[#1a4731]" />
 
       <div>
         {/* Header Badges */}
         <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
-          <div className="flex items-center space-x-2 min-w-0">
-            {onToggleSelect && (
-              <label
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                className="flex items-center cursor-pointer p-0.5 rounded hover:bg-slate-100 transition-colors shrink-0"
-                title={isSelected ? 'Deselect paper' : 'Select for combined PDF export'}
-              >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={(e) => onToggleSelect(research.researchID, e as any)}
-                  className="w-4 h-4 rounded border-slate-300 text-[#1a4731] focus:ring-[#1a4731] focus:ring-1 cursor-pointer accent-[#1a4731]"
-                />
-              </label>
-            )}
+          <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0">
             <span
               className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider shrink-0 ${
                 research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin'

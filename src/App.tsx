@@ -15,16 +15,13 @@ import { SuperAdminManagement } from './components/SuperAdminManagement';
 import { SDGSection } from './components/SDGSection';
 import { AuthModal } from './components/AuthModal';
 import { PrivacyConsentModal } from './components/PrivacyConsentModal';
-import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck, Download } from 'lucide-react';
-import { isUreliaUser, canSubmitResearch } from './utils/userUtils';
-import { generateCombinedAbstractsPdf } from './utils/pdfExport';
+import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import {
   seedInitialDatabaseIfEmpty,
   subscribeToResearches,
   subscribeToSubmissions,
   subscribeToAccessRequests,
-  subscribeToUsers,
   recordResearchView,
   recordResearchDownload,
   recordUserReadingHistory,
@@ -35,6 +32,7 @@ import {
   logoutUserWithSupabase
 } from './services/supabaseService';
 import { calculateIDF, getResearchTokens, scoreSearchRelevance, generateHybridRecommendations } from './utils/mlEngine';
+import { isUrelia, canSubmitResearch } from './utils/userUtils';
 import { INITIAL_USERS, INITIAL_RESEARCH, INITIAL_SUBMISSIONS } from './data/mockDatabase';
 
 export default function App() {
@@ -55,7 +53,6 @@ export default function App() {
   const [recommendations, setRecommendations] = useState<(Recommendation & { paper?: Research })[]>([]);
   const [targetRecommendationCollege, setTargetRecommendationCollege] = useState<UDMCollege>('CCS');
   const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [selectedPaperIds, setSelectedPaperIds] = useState<string[]>([]);
 
   const [selectedResearch, setSelectedResearch] = useState<Research | null>(null);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
@@ -75,13 +72,21 @@ export default function App() {
     sortBy: 'relevance'
   });
 
-  // Protect Admin tabs: Review Queue, Analytics & Reports, and User Management are exclusively accessible to URELIA
+  // Protect Admin tabs: "Review Queue", "Analytics & Reports", and "User Management" are exclusively for URELIA
   useEffect(() => {
-    const isUrelia = isUreliaUser(currentUser);
-    if (!isUrelia && (activeTab === 'admin_review' || activeTab === 'analytics' || activeTab === 'super_admin')) {
+    const isUreliaUser = isUrelia(currentUser);
+    if (!isUreliaUser && (activeTab === 'admin_review' || activeTab === 'analytics' || activeTab === 'super_admin')) {
       setActiveTab('archive');
     }
   }, [currentUser, activeTab]);
+
+  // Hard-block submission modal state if user is a student or not authorized
+  useEffect(() => {
+    if (showSubmissionModal && !canSubmitResearch(currentUser)) {
+      setShowSubmissionModal(false);
+      triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
+    }
+  }, [showSubmissionModal, currentUser]);
 
   // Show Toast
   const triggerToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -90,60 +95,18 @@ export default function App() {
   };
 
   // Safe handler for submission modal trigger
-  // Students and Guests are strictly blocked with exact toast message
   const handleOpenSubmissionModal = () => {
     if (!currentUser) {
-      setShowAuthModal(true);
       triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
+      setShowAuthModal(true);
       return;
     }
     if (!canSubmitResearch(currentUser)) {
       triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
+      setShowSubmissionModal(false);
       return;
     }
     setShowSubmissionModal(true);
-  };
-
-  // Multi-Select handlers for Research Papers Bulk Abstract Export
-  const handleToggleSelectPaper = (researchID: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setSelectedPaperIds(prev =>
-      prev.includes(researchID) ? prev.filter(id => id !== researchID) : [...prev, researchID]
-    );
-  };
-
-  const handleSelectAllVisible = () => {
-    const visibleIds = filteredResearchList.map(r => r.researchID);
-    if (visibleIds.length === 0) return;
-    const allVisibleSelected = visibleIds.every(id => selectedPaperIds.includes(id));
-    if (allVisibleSelected) {
-      // Deselect all visible
-      setSelectedPaperIds(prev => prev.filter(id => !visibleIds.includes(id)));
-    } else {
-      // Select all visible (union without duplicates)
-      setSelectedPaperIds(prev => Array.from(new Set([...prev, ...visibleIds])));
-    }
-  };
-
-  const handleClearSelection = () => {
-    setSelectedPaperIds([]);
-  };
-
-  const handleDownloadSelectedAbstracts = () => {
-    if (selectedPaperIds.length === 0) return;
-    const selectedPapers = rawResearchList.filter(
-      r => (r.status === 'approved' || !r.status) && selectedPaperIds.includes(r.researchID)
-    );
-    if (selectedPapers.length === 0) {
-      triggerToast('No valid research papers selected.', 'error');
-      return;
-    }
-    try {
-      generateCombinedAbstractsPdf(selectedPapers);
-      triggerToast(`Successfully downloaded ${selectedPapers.length} abstracts as combined PDF!`, 'success');
-    } catch (err: any) {
-      triggerToast('Failed to export PDF: ' + err.message, 'error');
-    }
   };
 
   // 1. Initialize & Subscribe to live Supabase database & Auth
@@ -154,36 +117,96 @@ export default function App() {
     // Live Supabase Auth state listener
     let unsubscribeAuth = () => {};
     if (isSupabaseConfigured) {
-      const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+          try {
+            localStorage.removeItem('udm_active_user');
+          } catch {}
+          return;
+        }
+
         if (session?.user) {
           try {
-            const { data: profile } = await supabase.from('users').select('*').eq('id', session.user.id).single();
-            if (profile) {
-              setCurrentUser({
-                userID: profile.id,
-                name: profile.name || profile.full_name || session.user.email?.split('@')[0],
-                fullName: profile.full_name || profile.name,
-                email: profile.email || session.user.email || '',
-                role: profile.role || 'student_faculty',
-                userType: profile.user_type || 'Student',
-                college: profile.college || 'CCS',
-                idNumber: profile.id_number || '',
-                courseProgram: profile.course_program || '',
-                readingHistory: profile.reading_history || []
-              });
-            }
+            const { data: profile } = await supabase
+              .from('users')
+              .select('*')
+              .or(`id.eq.${session.user.id},email.ilike.${session.user.email}`)
+              .maybeSingle();
+
+            const liveUser: User = {
+              userID: profile?.id || session.user.id,
+              name: profile?.name || profile?.full_name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
+              fullName: profile?.full_name || profile?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
+              email: profile?.email || session.user.email || '',
+              role: profile?.role || 'student_faculty',
+              userType: profile?.user_type || session.user.user_metadata?.user_type || 'Student',
+              college: profile?.college || session.user.user_metadata?.college || 'CCS',
+              idNumber: profile?.id_number || session.user.user_metadata?.id_number || '',
+              courseProgram: profile?.course_program || session.user.user_metadata?.course_program || '',
+              readingHistory: profile?.reading_history || []
+            };
+            setCurrentUser(liveUser);
+            try {
+              localStorage.setItem('udm_active_user', JSON.stringify(liveUser));
+            } catch {}
           } catch (err) {
             console.warn('Could not load user profile from Supabase:', err);
           }
         } else {
-          // If no active Supabase session, check if a demo user is logged in
-          const savedDemoUser = localStorage.getItem('udm_active_user');
-          if (!savedDemoUser) {
+          // If no active Supabase auth session, restore saved logged-in user from localStorage
+          const savedActiveUser = localStorage.getItem('udm_active_user');
+          if (savedActiveUser) {
+            try {
+              const parsed: User = JSON.parse(savedActiveUser);
+              if (parsed?.email) {
+                setCurrentUser(parsed);
+                // Asynchronously sync live profile from Supabase
+                (async () => {
+                  try {
+                    const { data: profile } = await supabase
+                      .from('users')
+                      .select('*')
+                      .ilike('email', parsed.email)
+                      .maybeSingle();
+
+                    if (profile) {
+                      const updated: User = {
+                        userID: profile.id,
+                        name: profile.name || profile.full_name || parsed.name,
+                        fullName: profile.full_name || profile.name,
+                        email: profile.email,
+                        role: profile.role || 'student_faculty',
+                        userType: profile.user_type || 'Student',
+                        college: profile.college || 'CCS',
+                        idNumber: profile.id_number || '',
+                        courseProgram: profile.course_program || '',
+                        readingHistory: profile.reading_history || []
+                      };
+                      setCurrentUser(updated);
+                      localStorage.setItem('udm_active_user', JSON.stringify(updated));
+                    }
+                  } catch {}
+                })();
+              }
+            } catch (e) {
+              console.warn('Failed parsing saved user:', e);
+              setCurrentUser(null);
+            }
+          } else {
             setCurrentUser(null);
           }
         }
       });
       unsubscribeAuth = () => authListener.subscription.unsubscribe();
+    } else {
+      // Local fallback session restoration
+      const savedUser = localStorage.getItem('udm_active_user');
+      if (savedUser) {
+        try {
+          setCurrentUser(JSON.parse(savedUser));
+        } catch {}
+      }
     }
 
     // Live subscription to Researches collection
@@ -205,43 +228,11 @@ export default function App() {
       setAccessRequestsList(data);
     });
 
-    // Live subscription to Users collection (instantly reflects role changes like Silvia Ambag -> Faculty/Admin)
-    const unsubscribeUsers = subscribeToUsers((allUsers) => {
-      if (!allUsers || allUsers.length === 0) return;
-      setCurrentUser(prev => {
-        if (!prev) return null;
-        const updated = allUsers.find(u =>
-          (u.userID && prev.userID && u.userID === prev.userID) ||
-          (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase())
-        );
-        if (updated) {
-          const hasChanged =
-            updated.role !== prev.role ||
-            updated.userType !== prev.userType ||
-            (updated.college && updated.college !== prev.college);
-          if (hasChanged) {
-            const merged: User = {
-              ...prev,
-              role: updated.role,
-              userType: updated.userType,
-              college: updated.college || prev.college
-            };
-            try {
-              localStorage.setItem('udm_active_user', JSON.stringify(merged));
-            } catch {}
-            return merged;
-          }
-        }
-        return prev;
-      });
-    });
-
     return () => {
       unsubscribeAuth();
       unsubscribeResearches();
       unsubscribeSubmissions();
       unsubscribeAccessRequests();
-      unsubscribeUsers();
     };
   }, []);
 
@@ -505,14 +496,14 @@ export default function App() {
               toastMsg.type === 'success'
                 ? 'bg-[#1a4731] border-[#c9a84c] text-white'
                 : toastMsg.type === 'info'
-                ? 'bg-[#1a4731] border-emerald-400 text-white'
+                ? 'bg-[#1a4731] border-[#c9a84c]/80 text-[#c9a84c]'
                 : 'bg-white border-rose-500 text-rose-800'
             }`}
           >
             {toastMsg.type === 'success' ? (
               <CheckCircle2 className="w-5 h-5 text-[#c9a84c]" />
             ) : toastMsg.type === 'info' ? (
-              <BookOpen className="w-5 h-5 text-emerald-400" />
+              <AlertCircle className="w-5 h-5 text-[#c9a84c]" />
             ) : (
               <AlertCircle className="w-5 h-5 text-rose-600" />
             )}
@@ -568,58 +559,6 @@ export default function App() {
               />
             </div>
 
-            {/* Multi-Select Research Papers & Combined Abstract PDF Export Toolbar */}
-            {filteredResearchList.length > 0 && (
-              <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center space-x-3">
-                  <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={
-                        filteredResearchList.length > 0 &&
-                        filteredResearchList.every(r => selectedPaperIds.includes(r.researchID))
-                      }
-                      onChange={handleSelectAllVisible}
-                      className="w-4 h-4 rounded border-slate-300 text-[#1a4731] focus:ring-[#1a4731] focus:ring-1 cursor-pointer accent-[#1a4731]"
-                    />
-                    <span>Select All in Results ({filteredResearchList.length})</span>
-                  </label>
-
-                  {selectedPaperIds.length > 0 && (
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#1a4731]/10 text-[#1a4731] font-bold border border-[#1a4731]/20">
-                      {selectedPaperIds.length} {selectedPaperIds.length === 1 ? 'paper' : 'papers'} selected
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {selectedPaperIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearSelection}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-rose-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                    >
-                      Clear Selection
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleDownloadSelectedAbstracts}
-                    disabled={selectedPaperIds.length === 0}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer ${
-                      selectedPaperIds.length > 0
-                        ? 'bg-[#1a4731] hover:bg-[#123323] text-white'
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                    }`}
-                  >
-                    <Download className={`w-3.5 h-3.5 ${selectedPaperIds.length > 0 ? 'text-[#c9a84c]' : 'text-slate-400'}`} />
-                    <span>Download Selected Abstracts (PDF)</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Research Cards Grid */}
             {filteredResearchList.length === 0 ? (
               <div className="p-12 text-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -649,8 +588,6 @@ export default function App() {
                   <ResearchCard
                     key={paper.researchID}
                     research={paper}
-                    isSelected={selectedPaperIds.includes(paper.researchID)}
-                    onToggleSelect={handleToggleSelectPaper}
                     onSelect={handleSelectResearch}
                     onDownloadAbstract={handleDownloadAbstract}
                   />
@@ -674,8 +611,8 @@ export default function App() {
           </ErrorBoundary>
         )}
 
-        {/* TAB 3: ADMIN REVIEW QUEUE */}
-        {activeTab === 'admin_review' && (
+        {/* TAB 3: ADMIN REVIEW QUEUE - EXCLUSIVELY URELIA */}
+        {activeTab === 'admin_review' && isUrelia(currentUser) && (
           <AdminReviewDashboard
             submissions={submissionsList}
             accessRequests={accessRequestsList}
@@ -684,13 +621,13 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: ANALYTICS & REPORTS */}
-        {activeTab === 'analytics' && (
+        {/* TAB 4: ANALYTICS & REPORTS - EXCLUSIVELY URELIA */}
+        {activeTab === 'analytics' && isUrelia(currentUser) && (
           <AnalyticsAndReports analyticsData={analyticsData} />
         )}
 
-        {/* TAB 5: SUPER ADMIN MANAGEMENT */}
-        {activeTab === 'super_admin' && (
+        {/* TAB 5: USER MANAGEMENT - EXCLUSIVELY URELIA */}
+        {activeTab === 'super_admin' && isUrelia(currentUser) && (
           <SuperAdminManagement />
         )}
 
@@ -728,8 +665,8 @@ export default function App() {
             try {
               localStorage.setItem('udm_active_user', JSON.stringify(user));
             } catch {}
-            if (isUreliaUser(user)) {
-              setActiveTab('admin_review');
+            if (isUrelia(user)) {
+              setActiveTab('super_admin');
             } else {
               setActiveTab('archive');
             }

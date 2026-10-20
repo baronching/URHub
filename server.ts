@@ -3,9 +3,6 @@
  * Universidad de Manila - URELIA Office
  */
 
-import dotenv from 'dotenv';
-dotenv.config({ override: true });
-
 import express, { Request, Response } from 'express';
 import http from 'http';
 import path from 'path';
@@ -14,9 +11,26 @@ import { INITIAL_RESEARCH, INITIAL_SUBMISSIONS, INITIAL_SYSTEM_SETTINGS, INITIAL
 import { generateHybridRecommendations, calculateIDF, getResearchTokens, scoreSearchRelevance } from './src/utils/mlEngine';
 import { generateContextualAcademicAnswer } from './src/utils/researchAiAssistant';
 import { Research, Submission, User, SystemSettings, UDMCollege, UDM_COLLEGES } from './src/types';
+import { createClient } from '@supabase/supabase-js';
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+// Initialize Supabase client on backend if configured
+const rawSupabaseUrl = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim();
+const supabaseServerUrl = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+const supabaseServerKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
+
+const isServerSupabaseConfigured = Boolean(
+  supabaseServerUrl &&
+  supabaseServerKey &&
+  supabaseServerUrl.startsWith('http') &&
+  !supabaseServerUrl.includes('your-project-ref')
+);
+
+const serverSupabase = isServerSupabaseConfigured
+  ? createClient(supabaseServerUrl, supabaseServerKey)
+  : null;
 
 // Initialize Google Gemini SDK with server-side API key and telemetry header
 const ai = new GoogleGenAI({
@@ -296,8 +310,8 @@ app.get('/api/recommendations/:userId', (req: Request, res: Response) => {
   });
 });
 
-// Submissions: Submit Research (Multi-step)
-app.post('/api/submissions', (req: Request, res: Response) => {
+// Submissions: Submit Research (Multi-step with role & college validation)
+app.post('/api/submissions', async (req: Request, res: Response) => {
   const {
     submittedBy,
     submitterName,
@@ -321,14 +335,82 @@ app.post('/api/submissions', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid UDM College selected.' });
   }
 
+  // 1. Resolve submitter identity
+  let submitterUser: User | null = null;
+  const cleanEmail = (submitterEmail || '').trim().toLowerCase();
+  const submitterId = (submittedBy || '').trim();
+
+  if (serverSupabase) {
+    try {
+      const { data } = await serverSupabase
+        .from('users')
+        .select('*')
+        .or(`id.eq.${submitterId},email.ilike.${cleanEmail}`)
+        .maybeSingle();
+
+      if (data) {
+        submitterUser = {
+          userID: data.id,
+          name: data.name || data.full_name,
+          email: data.email,
+          role: data.role,
+          userType: data.user_type,
+          college: data.college,
+          course: data.course_program
+        };
+      }
+    } catch (dbErr) {
+      console.warn('Backend Supabase user lookup warning:', dbErr);
+    }
+  }
+
+  if (!submitterUser) {
+    const found = usersDB.find(u => 
+      u.userID === submitterId || 
+      (cleanEmail && u.email.toLowerCase() === cleanEmail)
+    ) || INITIAL_USERS.find(u => 
+      u.userID === submitterId || 
+      (cleanEmail && u.email.toLowerCase() === cleanEmail)
+    );
+    if (found) submitterUser = found;
+  }
+
+  // 2. Reject unauthenticated or unknown submitters
+  if (!submitterUser) {
+    return res.status(403).json({
+      error: 'Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.'
+    });
+  }
+
+  // 3. Reject Students
+  const isSuperAdmin = submitterUser.role === 'super_admin';
+  const isFaculty = submitterUser.userType === 'Faculty' || submitterUser.userType === 'Faculty_Admin' || submitterUser.role === 'admin';
+  const isStudentUser = !isSuperAdmin && !isFaculty;
+
+  if (isStudentUser) {
+    return res.status(403).json({
+      error: 'Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.'
+    });
+  }
+
+  // 4. Reject Faculty/Admin submitting for a different college than their registered college
+  if (isFaculty && !isSuperAdmin) {
+    const userCollege = submitterUser.college;
+    if (userCollege && department !== userCollege) {
+      return res.status(403).json({
+        error: `Submission rejected: Faculty/Admin members are strictly authorized to submit research only for their designated college (${userCollege}). Submitted college '${department}' does not match.`
+      });
+    }
+  }
+
   const newSubmissionID = `SUB-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
   const newResearchID = `RES-SUB-${Date.now().toString().slice(-5)}`;
 
   const newSubmission: Submission = {
     submissionID: newSubmissionID,
-    submittedBy: submittedBy || 'USR-UDM-GUEST',
-    submitterName: submitterName || 'UDM Researcher',
-    submitterEmail: submitterEmail || 'researcher@udm.edu.ph',
+    submittedBy: submitterUser.userID,
+    submitterName: submitterUser.name || submitterName || 'UDM Researcher',
+    submitterEmail: submitterUser.email || submitterEmail || 'researcher@udm.edu.ph',
     researchID: newResearchID,
     title: title.trim(),
     abstract: abstract.trim(),
@@ -445,53 +527,26 @@ app.get('/api/analytics', (req: Request, res: Response) => {
 
 // Super Admin User Management
 app.get('/api/admin/users', async (req: Request, res: Response) => {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  const isSupabaseConfigured = Boolean(
-    supabaseUrl &&
-    supabaseKey &&
-    supabaseUrl.startsWith('http') &&
-    !supabaseUrl.includes('your-project-ref')
-  );
-
-  if (isSupabaseConfigured) {
+  if (serverSupabase) {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(supabaseUrl!, supabaseKey!);
-      const { data, error } = await supabase.from('users').select('*');
+      const { data, error } = await serverSupabase.from('users').select('*');
       if (!error && data && data.length > 0) {
-        const mapped = data.map(u => {
-          let detectedType: 'Student' | 'Faculty_Admin' = 'Student';
-          const rawType = String(u.user_type || '').toLowerCase();
-          const rawRole = String(u.role || '').toLowerCase();
-          if (
-            rawType.includes('faculty') ||
-            rawRole === 'faculty' ||
-            rawRole === 'faculty_admin' ||
-            rawRole === 'admin' ||
-            rawRole === 'super_admin' ||
-            rawType.includes('admin')
-          ) {
-            detectedType = 'Faculty_Admin';
-          }
-
-          return {
-            userID: u.id || u.user_id,
-            name: u.name || u.full_name,
-            fullName: u.full_name || u.name,
-            email: u.email,
-            role: u.role || (detectedType === 'Faculty_Admin' ? 'student_faculty' : 'student_faculty'),
-            userType: (u.user_type as any) || detectedType,
-            college: u.college,
-            idNumber: u.id_number,
-            courseProgram: u.course_program,
-            readingHistory: u.reading_history || []
-          };
-        });
-        return res.json(mapped);
+        const mappedUsers: User[] = data.map(u => ({
+          userID: u.id || u.user_id,
+          name: u.name || u.full_name || u.email?.split('@')[0],
+          fullName: u.full_name || u.name,
+          email: u.email,
+          role: u.role,
+          userType: u.user_type,
+          college: u.college,
+          idNumber: u.id_number,
+          courseProgram: u.course_program,
+          readingHistory: u.reading_history || []
+        }));
+        return res.json(mappedUsers);
       }
     } catch (err) {
-      console.warn('Could not query Supabase users in API:', err);
+      console.warn('Could not query Supabase users on backend:', err);
     }
   }
   const safeUsers = usersDB.map(({ password: _, ...user }) => user);
@@ -500,74 +555,28 @@ app.get('/api/admin/users', async (req: Request, res: Response) => {
 
 app.put('/api/admin/users/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { role, userType, college, course } = req.body;
+  const { role, college, course } = req.body;
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  const isSupabaseConfigured = Boolean(
-    supabaseUrl &&
-    supabaseKey &&
-    supabaseUrl.startsWith('http') &&
-    !supabaseUrl.includes('your-project-ref')
-  );
-
-  if (isSupabaseConfigured) {
+  if (serverSupabase) {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseAdmin = createClient(supabaseUrl!, supabaseKey!);
-      const updates: any = {};
-      if (role) updates.role = role;
-      if (userType) updates.user_type = userType;
-      if (college) updates.college = college;
-      if (course) updates.course_program = course;
-
-      // 1. Try update by id
-      let { data, error } = await supabaseAdmin.from('users').update(updates).eq('id', id).select();
-
-      // 2. Try update by user_id
-      if (error || !data || data.length === 0) {
-        const res2 = await supabaseAdmin.from('users').update(updates).eq('user_id', id).select();
-        if (res2.data && res2.data.length > 0) {
-          data = res2.data;
-          error = null;
-        }
-      }
-
-      // 3. Try update by email if id is email or found in usersDB
-      const matched = usersDB.find(u => u.userID === id || (u as any).id === id || u.email === id);
-      const emailToMatch = matched?.email || (id.includes('@') ? id : undefined);
-      if ((error || !data || data.length === 0) && emailToMatch) {
-        const res3 = await supabaseAdmin.from('users').update(updates).eq('email', emailToMatch).select();
-        if (res3.data && res3.data.length > 0) {
-          data = res3.data;
-          error = null;
-        }
-      }
-
-      // 4. If error (e.g. check constraint on role), fallback to student_faculty with user_type
-      if (error) {
-        console.warn('Backend Supabase user update warning:', error.message);
-        if (updates.role === 'faculty') {
-          updates.role = 'student_faculty';
-          await supabaseAdmin.from('users').update(updates).eq('id', id);
-          if (emailToMatch) {
-            await supabaseAdmin.from('users').update(updates).eq('email', emailToMatch);
-          }
-        }
-      }
-    } catch (err: any) {
-      console.warn('Could not update user in Supabase:', err.message);
+      const updateData: any = {};
+      if (role) updateData.role = role;
+      if (college) updateData.college = college;
+      if (course) updateData.course_program = course;
+      await serverSupabase.from('users').update(updateData).eq('id', id);
+    } catch (err) {
+      console.warn('Could not update user in Supabase on backend:', err);
     }
   }
 
-  const user = usersDB.find(u => u.userID === id || (u as any).id === id || u.email === id);
+  const user = usersDB.find(u => u.userID === id);
   if (user) {
     if (role) user.role = role;
-    if (userType) user.userType = userType;
     if (college) user.college = college;
     if (course) user.course = course;
   }
-  res.json({ message: 'User role updated successfully.', user });
+
+  res.json({ message: 'User role updated successfully.' });
 });
 
 // System Settings Management
@@ -843,7 +852,14 @@ async function startServer() {
   }
 }
 
-if (process.env.VERCEL !== '1') {
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT
+);
+
+if (!isServerless) {
   startServer();
 }
 

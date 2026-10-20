@@ -1,101 +1,68 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, SystemSettings, UDMCollege, UDM_COLLEGES } from '../types';
 import { INITIAL_USERS, INITIAL_SYSTEM_SETTINGS } from '../data/mockDatabase';
-import { getUserRoleDisplayLabel, isUreliaUser, isFacultyUser } from '../utils/userUtils';
-import { subscribeToUsers, updateUserRole } from '../services/supabaseService';
+import { getUserRoleDisplayLabel } from '../utils/userUtils';
+import {
+  subscribeToUsers,
+  updateUserRole,
+  subscribeToSystemSettings,
+  saveSystemSettings
+} from '../services/supabaseService';
 import { Settings, Users, Shield, Save, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const SuperAdminManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [settings, setSettings] = useState<SystemSettings>(INITIAL_SYSTEM_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [msg, setMsg] = useState('');
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const sRes = await fetch('/api/admin/settings').catch(() => null);
-      let sData = INITIAL_SYSTEM_SETTINGS;
-      if (sRes && sRes.ok && (sRes.headers.get('content-type') || '').includes('application/json')) {
-        sData = await sRes.json();
-      }
-      setSettings(sData);
-    } catch (err) {
-      console.warn('Using local fallback for settings:', err);
-      setSettings(INITIAL_SYSTEM_SETTINGS);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadData();
-    // Real-time synchronization with Supabase users table
-    const unsubscribe = subscribeToUsers((liveUsers) => {
-      if (liveUsers && liveUsers.length > 0) {
-        setUsers(liveUsers);
-        setIsLoading(false);
-      }
+    // 1. Subscribe to live Supabase users (includes all accounts created before or now)
+    const unsubUsers = subscribeToUsers((liveUsers) => {
+      setUsers(liveUsers);
+      setIsLoading(false);
     });
-    return () => unsubscribe();
+
+    // 2. Subscribe to live system settings
+    const unsubSettings = subscribeToSystemSettings((liveSettings) => {
+      setSettings(liveSettings);
+    });
+
+    return () => {
+      unsubUsers();
+      unsubSettings();
+    };
   }, []);
 
-  const handleRoleUpdate = async (userID: string, roleInput: string) => {
+  const handleRoleUpdate = async (userID: string, role: UserRole) => {
     try {
-      let roleToSave: UserRole = 'student_faculty';
-      let userTypeToSave: 'Student' | 'Faculty_Admin' = 'Student';
-
-      if (roleInput === 'super_admin' || roleInput === 'admin') {
-        roleToSave = 'super_admin';
-        userTypeToSave = 'Faculty_Admin';
-      } else if (roleInput === 'faculty') {
-        roleToSave = 'student_faculty';
-        userTypeToSave = 'Faculty_Admin';
-      } else {
-        roleToSave = 'student_faculty';
-        userTypeToSave = 'Student';
-      }
-
-      // 1. Immediate local state update for responsive feedback
-      setUsers(prev =>
-        prev.map(u =>
-          (u.userID === userID || (u as any).id === userID || u.email === userID)
-            ? { ...u, role: roleToSave, userType: userTypeToSave }
-            : u
-        )
-      );
-
-      // 2. Persist to Supabase and in-memory store
-      await updateUserRole(userID, roleToSave, userTypeToSave);
-
-      // 3. Notify backend server route (passes both role and userType)
-      fetch(`/api/admin/users/${encodeURIComponent(userID)}`, {
+      await updateUserRole(userID, role);
+      // Also notify backend if online
+      fetch(`/api/admin/users/${userID}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: roleToSave, userType: userTypeToSave })
-      }).catch(err => console.warn('Backend sync warning:', err));
+        body: JSON.stringify({ role })
+      }).catch(() => {});
 
-      setMsg('User role updated successfully.');
+      setMsg('User role updated successfully in Supabase.');
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
-      console.error('Role update error:', err);
+      console.error(err);
       setMsg('Failed to update user role.');
-      setTimeout(() => setMsg(''), 3000);
     }
   };
 
   const handleSettingsSave = async () => {
     if (!settings) return;
     try {
-      const res = await fetch('/api/admin/settings', {
+      await saveSystemSettings(settings);
+      fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
-      });
-      if (res.ok) {
-        setMsg('System settings saved successfully.');
-        setTimeout(() => setMsg(''), 3000);
-      }
+      }).catch(() => {});
+      setMsg('System settings saved successfully.');
+      setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
     }
@@ -119,11 +86,11 @@ export const SuperAdminManagement: React.FC = () => {
               <Settings className="w-5 h-5" />
             </span>
             <h2 className="text-xl font-bold text-slate-900">
-              Super Admin Management Portal
+              URELIA User & Role Management
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Control Role-Based Access Control (RBAC), system settings, and UDM email domain constraints.
+            Institutional oversight of Role-Based Access Control (RBAC), system settings, and research archive security.
           </p>
         </div>
 
@@ -139,7 +106,7 @@ export const SuperAdminManagement: React.FC = () => {
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <h3 className="text-sm font-bold text-[#1a4731] flex items-center space-x-2">
           <Users className="w-4 h-4 text-[#1a4731]" />
-          <span>User Accounts & RBAC Roles ({users.length})</span>
+          <span>User Accounts & Role Permissions ({users.length})</span>
         </h3>
 
         <div className="overflow-x-auto">
@@ -150,7 +117,7 @@ export const SuperAdminManagement: React.FC = () => {
                 <th className="p-3">Name</th>
                 <th className="p-3">UDM Email</th>
                 <th className="p-3">College</th>
-                <th className="p-3">RBAC Role</th>
+                <th className="p-3">Role</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -167,12 +134,12 @@ export const SuperAdminManagement: React.FC = () => {
                   <td className="p-3 font-mono text-slate-700">{u.college || 'CCS'}</td>
                   <td className="p-3">
                     <select
-                      value={isUreliaUser(u) ? 'super_admin' : (isFacultyUser(u) ? 'faculty' : 'student_faculty')}
-                      onChange={e => handleRoleUpdate(u.userID, e.target.value)}
-                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer font-bold text-xs"
+                      value={u.role}
+                      onChange={e => handleRoleUpdate(u.userID, e.target.value as UserRole)}
+                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer font-medium"
                     >
                       <option value="student_faculty">Student</option>
-                      <option value="faculty">Faculty/Admin</option>
+                      <option value="admin">Faculty/Admin</option>
                       <option value="super_admin">URELIA</option>
                     </select>
                   </td>
