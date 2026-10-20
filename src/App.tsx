@@ -15,8 +15,9 @@ import { SuperAdminManagement } from './components/SuperAdminManagement';
 import { SDGSection } from './components/SDGSection';
 import { AuthModal } from './components/AuthModal';
 import { PrivacyConsentModal } from './components/PrivacyConsentModal';
-import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck, Download, Loader2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { generateBatchAbstractsPdf } from './utils/abstractPdfGenerator';
 import {
   seedInitialDatabaseIfEmpty,
   subscribeToResearches,
@@ -55,6 +56,9 @@ export default function App() {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
 
   const [selectedResearch, setSelectedResearch] = useState<Research | null>(null);
+  const [selectedResearchIds, setSelectedResearchIds] = useState<string[]>([]);
+  const [isDownloadingBatch, setIsDownloadingBatch] = useState<boolean>(false);
+  const selectAllCheckboxRef = React.useRef<HTMLInputElement>(null);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(() => {
@@ -381,6 +385,79 @@ export default function App() {
     recordResearchDownload(paper.researchID);
   };
 
+  // Filtered IDs for batch selection
+  const filteredIds = useMemo(() => filteredResearchList.map(r => r.researchID), [filteredResearchList]);
+  const selectedFilteredCount = useMemo(() => {
+    return filteredIds.filter(id => selectedResearchIds.includes(id)).length;
+  }, [filteredIds, selectedResearchIds]);
+
+  const allFilteredSelected = filteredIds.length > 0 && selectedFilteredCount === filteredIds.length;
+  const someFilteredSelected = selectedFilteredCount > 0 && selectedFilteredCount < filteredIds.length;
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = someFilteredSelected;
+    }
+  }, [someFilteredSelected]);
+
+  const handleToggleSelectResearch = (paper: Research, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedResearchIds(prev =>
+      prev.includes(paper.researchID)
+        ? prev.filter(id => id !== paper.researchID)
+        : [...prev, paper.researchID]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      // Deselect all papers that are in current filtered results
+      setSelectedResearchIds(prev => prev.filter(id => !filteredIds.includes(id)));
+    } else {
+      // Select all papers in current filtered results
+      setSelectedResearchIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const handleDownloadBatchAbstracts = async () => {
+    const selectedPapers = rawResearchList.filter(r => selectedResearchIds.includes(r.researchID));
+
+    if (selectedPapers.length === 0) {
+      triggerToast('Please select at least one research paper to download abstracts.', 'info');
+      return;
+    }
+
+    if (!currentUser) {
+      triggerToast('Please sign in with your UDM account to download research abstracts.', 'info');
+      setShowAuthModal(true);
+      return;
+    }
+
+    setIsDownloadingBatch(true);
+    try {
+      const success = generateBatchAbstractsPdf(selectedPapers);
+      if (success) {
+        selectedPapers.forEach(paper => {
+          recordResearchDownload(paper.researchID);
+          fetch(`/api/research/${paper.researchID}/download-abstract`, { method: 'POST' }).catch(() => {});
+        });
+        triggerToast(
+          `Successfully downloaded ${selectedPapers.length} research ${
+            selectedPapers.length === 1 ? 'abstract' : 'abstracts'
+          } as one PDF!`,
+          'success'
+        );
+      } else {
+        triggerToast('Failed to generate PDF compilation. Please try again.', 'error');
+      }
+    } catch (err) {
+      console.error('Batch download failed:', err);
+      triggerToast('Error generating batch abstract PDF.', 'error');
+    } finally {
+      setIsDownloadingBatch(false);
+    }
+  };
+
   // Handle Admin Review Submission
   const handleReviewSubmission = async (
     submissionID: string,
@@ -559,6 +636,63 @@ export default function App() {
               />
             </div>
 
+            {/* Batch Selection & Multi-Abstract Download Bar */}
+            {filteredResearchList.length > 0 && (
+              <div className="bg-white rounded-xl px-4 sm:px-5 py-3.5 sm:py-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all">
+                <div className="flex items-center space-x-3 select-none flex-wrap gap-y-2">
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      ref={selectAllCheckboxRef}
+                      checked={allFilteredSelected}
+                      onChange={handleToggleSelectAll}
+                      className="w-4 h-4 text-[#1a4731] border-slate-300 rounded focus:ring-[#1a4731] accent-[#1a4731] cursor-pointer"
+                    />
+                    <span className="font-bold text-[#1e293b] text-sm sm:text-base">
+                      Select All in Results ({filteredResearchList.length})
+                    </span>
+                  </label>
+                  {selectedResearchIds.length > 0 && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold text-[#1a4731] bg-[#1a4731]/10 px-2.5 py-0.5 rounded-full border border-[#1a4731]/20">
+                        {selectedResearchIds.length} selected
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedResearchIds([])}
+                        className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                      >
+                        Clear selection
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadBatchAbstracts}
+                  disabled={isDownloadingBatch}
+                  className={`px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center space-x-2 transition-all cursor-pointer ${
+                    selectedResearchIds.length > 0
+                      ? 'bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm ring-1 ring-[#1a4731]'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  {isDownloadingBatch ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                  ) : (
+                    <Download className={`w-4 h-4 ${selectedResearchIds.length > 0 ? 'text-[#c9a84c]' : 'text-slate-500'}`} />
+                  )}
+                  <span>Download Selected Abstracts (PDF)</span>
+                  {selectedResearchIds.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-xs font-bold bg-[#c9a84c] text-[#1a4731]">
+                      {selectedResearchIds.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
             {/* Research Cards Grid */}
             {filteredResearchList.length === 0 ? (
               <div className="p-12 text-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -588,6 +722,8 @@ export default function App() {
                   <ResearchCard
                     key={paper.researchID}
                     research={paper}
+                    isSelected={selectedResearchIds.includes(paper.researchID)}
+                    onToggleSelect={handleToggleSelectResearch}
                     onSelect={handleSelectResearch}
                     onDownloadAbstract={handleDownloadAbstract}
                   />

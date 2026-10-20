@@ -110,6 +110,7 @@ export interface Research {
   dateAdded: string;
   relevanceScore?: number;
   authorCategory?: AuthorCategory;
+  adviser?: string;
 }
 
 export interface Submission {
