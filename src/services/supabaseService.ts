@@ -656,8 +656,31 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
       newUser.userID = authData.user.id;
     }
 
-    // If session is null and user exists, email confirmation/OTP is pending
-    if (authData.user && !authData.session) {
+    // Check if user is already registered (identities: [] returned by Supabase Auth)
+    const isAlreadyRegistered = authData.user && Array.isArray(authData.user.identities) && authData.user.identities.length === 0;
+    if (isAlreadyRegistered) {
+      // Force resend verification code in case user registered earlier but didn't verify
+      try {
+        const { error: resendErr } = await supabase.auth.resend({
+          type: 'signup',
+          email: normalizedEmail
+        });
+        if (resendErr) {
+          if (resendErr.message.toLowerCase().includes('already confirmed')) {
+            throw new Error('This UDM account has already been verified! Please switch to the Sign In tab to log in.');
+          }
+          if (resendErr.message.toLowerCase().includes('rate limit')) {
+            throw new Error('Email rate limit reached. Please wait a few minutes before trying again or check your spam folder.');
+          }
+        }
+      } catch (e: any) {
+        if (e.message?.includes('already been verified') || e.message?.includes('rate limit')) {
+          throw e;
+        }
+      }
+      needsVerification = true;
+    } else if (authData.user && !authData.session) {
+      // Standard new registration pending verification
       needsVerification = true;
     }
   }
@@ -793,7 +816,15 @@ export async function resendSignupOTP(email: string): Promise<void> {
       type: 'signup',
       email: cleanEmail
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('seconds')) {
+        throw new Error('Verification email rate limit reached. Please wait 1-2 minutes before requesting a new code.');
+      }
+      if (error.message.toLowerCase().includes('already confirmed')) {
+        throw new Error('This account has already been verified! Please go to the Sign In tab to log in.');
+      }
+      throw new Error(error.message);
+    }
   }
 }
 
