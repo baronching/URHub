@@ -132,22 +132,39 @@ export default function App() {
 
         if (session?.user) {
           try {
-            const { data: profile } = await supabase
-              .from('users')
-              .select('*')
-              .or(`id.eq.${session.user.id},email.ilike.${session.user.email}`)
-              .maybeSingle();
+            let profile: any = null;
+            try {
+              const { data: prof } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+              if (prof) profile = prof;
+            } catch {}
 
+            if (!profile) {
+              try {
+                const { data: usr } = await supabase
+                  .from('users')
+                  .select('*')
+                  .or(`id.eq.${session.user.id},email.ilike.${session.user.email}`)
+                  .maybeSingle();
+                if (usr) profile = usr;
+              } catch {}
+            }
+
+            const meta = session.user.user_metadata || {};
             const liveUser: User = {
               userID: profile?.id || session.user.id,
-              name: profile?.name || profile?.full_name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
-              fullName: profile?.full_name || profile?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
+              name: profile?.full_name || profile?.name || meta.full_name || session.user.email?.split('@')[0],
+              fullName: profile?.full_name || profile?.name || meta.full_name || session.user.email?.split('@')[0],
               email: profile?.email || session.user.email || '',
-              role: profile?.role || 'student_faculty',
-              userType: profile?.user_type || session.user.user_metadata?.user_type || 'Student',
-              college: profile?.college || session.user.user_metadata?.college || 'CCS',
-              idNumber: profile?.id_number || session.user.user_metadata?.id_number || '',
-              courseProgram: profile?.course_program || session.user.user_metadata?.course_program || '',
+              role: profile?.role === 'admin' ? 'admin' : profile?.role === 'super_admin' ? 'super_admin' : 'student_faculty',
+              userType: profile?.role === 'Faculty/Admin' ? 'Faculty_Admin' : (profile?.user_type || meta.role || meta.user_type || 'Student'),
+              college: (profile?.udm_unit?.slice(0, 3) || profile?.college || meta.college || 'CCS') as UDMCollege,
+              idNumber: profile?.id_number || meta.id_number || '',
+              courseProgram: profile?.course || profile?.course_program || meta.course || meta.course_program || '',
+              yearLevel: profile?.year_level || meta.year_level || '1st Year',
               readingHistory: profile?.reading_history || []
             };
             setCurrentUser(liveUser);

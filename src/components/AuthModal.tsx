@@ -75,6 +75,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
   const [otpCode, setOtpCode] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [pasteLinkInput, setPasteLinkInput] = useState('');
+  const [showLinkPaste, setShowLinkPaste] = useState(false);
 
   // Forgot password sub-state
   const [resetEmail, setResetEmail] = useState('');
@@ -182,6 +184,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Verification failed. Please check the code and try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle direct verification from pasted confirmation link
+  const handleVerifyFromLinkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pasteLinkInput.trim()) return;
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsLoading(true);
+
+    try {
+      const verifiedUser = await verifySignupOTP(pendingEmail, pasteLinkInput.trim());
+      onLoginSuccess(verifiedUser);
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not verify link. Please make sure the entire link from the email is pasted.');
     } finally {
       setIsLoading(false);
     }
@@ -589,10 +610,64 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     autoComplete="one-time-code"
                     autoFocus
                     value={otpCode}
-                    onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    onChange={e => {
+                      const val = e.target.value.trim();
+                      const match = val.match(/token=([0-9]{6})/i);
+                      if (match) {
+                        setOtpCode(match[1]);
+                      } else {
+                        setOtpCode(val.replace(/\D/g, '').slice(0, 6));
+                      }
+                    }}
                     placeholder="123456"
                     className="w-full max-w-[240px] mx-auto block bg-slate-50 border-2 border-slate-300 focus:border-[#1a4731] rounded-xl py-3 text-center text-2xl font-mono tracking-[0.5em] font-extrabold text-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#1a4731]/15 transition-all"
                   />
+
+                  {/* Helper Tip & Direct Link Paste Option */}
+                  <div className="bg-amber-50/90 border border-amber-200/80 rounded-lg p-2.5 mt-2 text-[11px] text-amber-900 text-left space-y-1.5">
+                    <p className="font-bold flex items-center space-x-1">
+                      <span>Tip:</span>
+                      <span className="font-normal">If you received an email with a link, the 6 numbers are in the URL after <code className="bg-amber-100 px-1 py-0.2 rounded font-mono font-bold text-amber-950">token=</code>. You can paste the link into the code box above, or paste it below:</span>
+                    </p>
+
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowLinkPaste(!showLinkPaste)}
+                        className="text-[11px] font-bold text-[#1a4731] hover:underline cursor-pointer flex items-center space-x-1"
+                      >
+                        <span>{showLinkPaste ? 'Hide link paste field' : 'Paste the email link directly'}</span>
+                      </button>
+
+                      {showLinkPaste && (
+                        <div className="mt-2 pt-2 border-t border-amber-200/60 space-y-2">
+                          <input
+                            type="text"
+                            value={pasteLinkInput}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setPasteLinkInput(val);
+                              // Auto-extract into OTP code box as well
+                              const tokenMatch = val.match(/[?&]token=([0-9]{6})/i) || val.match(/token=([0-9]{6})/i);
+                              if (tokenMatch) {
+                                setOtpCode(tokenMatch[1]);
+                              }
+                            }}
+                            placeholder="Paste link: https://...supabase.co/auth/v1/verify?token=..."
+                            className="w-full bg-white border border-amber-300 rounded-lg p-2 text-[11px] font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#1a4731]"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleVerifyFromLinkSubmit}
+                            disabled={isLoading || !pasteLinkInput.trim()}
+                            className="w-full py-2 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                          >
+                            {isLoading ? 'Verifying Link...' : 'Verify from Pasted Link'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <button

@@ -676,20 +676,42 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
 /**
  * Verify 6-digit Signup OTP token sent to user's @udm.edu.ph email
  */
-export async function verifySignupOTP(email: string, token: string): Promise<User> {
+export async function verifySignupOTP(email: string, tokenOrHash: string): Promise<User> {
   const cleanEmail = email.trim().toLowerCase();
-  const cleanToken = token.trim();
+  let cleanToken = tokenOrHash.trim();
 
-  if (!/^\d{6}$/.test(cleanToken)) {
-    throw new Error('Please enter a valid 6-digit verification code.');
+  // If the user passed or pasted an entire URL, parse out the token or token_hash
+  if (cleanToken.includes('http://') || cleanToken.includes('https://') || cleanToken.includes('token=') || cleanToken.includes('token_hash=')) {
+    try {
+      const tokenMatch = cleanToken.match(/[?&]token=([0-9]{6})/i) || cleanToken.match(/token=([0-9]{6})/i);
+      const hashMatch = cleanToken.match(/[?&]token_hash=([^&#]+)/i) || cleanToken.match(/token_hash=([^&#]+)/i);
+
+      if (tokenMatch) {
+        cleanToken = tokenMatch[1];
+      } else if (hashMatch) {
+        cleanToken = decodeURIComponent(hashMatch[1]);
+      } else {
+        const numMatch = cleanToken.match(/\b([0-9]{6})\b/);
+        if (numMatch) {
+          cleanToken = numMatch[1];
+        }
+      }
+    } catch {}
+  }
+
+  const isNumeric6 = /^\d{6}$/.test(cleanToken);
+  const isHash = cleanToken.length > 10;
+
+  if (!isNumeric6 && !isHash) {
+    throw new Error('Please enter a valid 6-digit verification code or paste the link from your email.');
   }
 
   if (isSupabaseConfigured) {
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanToken,
-      type: 'signup'
-    });
+    const verifyPayload: any = isNumeric6
+      ? { email: cleanEmail, token: cleanToken, type: 'signup' }
+      : { token_hash: cleanToken, type: 'signup' };
+
+    const { data, error } = await supabase.auth.verifyOtp(verifyPayload);
 
     if (error) {
       throw new Error(error.message || 'Invalid or expired verification code. Please request a new one.');
