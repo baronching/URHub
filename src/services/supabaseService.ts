@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Research, Submission, User, SystemSettings, UDMCollege, AccessRequest } from '../types';
+import { Research, Submission, User, SystemSettings, UDMCollege, AccessRequest, UDM_COLLEGES } from '../types';
 import {
   INITIAL_RESEARCH,
   INITIAL_USERS,
@@ -584,43 +584,66 @@ export interface RegisterPayload {
   email: string;
   password?: string;
   confirmPassword?: string;
-  role: 'Student' | 'Faculty' | 'Faculty_Admin';
+  role: 'Student' | 'Faculty' | 'Faculty_Admin' | 'Faculty/Admin';
   college: UDMCollege;
   idNumber: string;
   courseProgram: string;
   yearLevel?: string;
 }
 
-export async function registerUserWithSupabase(data: RegisterPayload): Promise<User> {
+export interface RegisterResult {
+  user: User;
+  needsVerification: boolean;
+  message?: string;
+}
+
+export async function registerUserWithSupabase(data: RegisterPayload): Promise<RegisterResult> {
+  const normalizedEmail = data.email.trim().toLowerCase();
+
+  // Strict institutional email validation
+  if (!normalizedEmail.endsWith('@udm.edu.ph')) {
+    throw new Error('Access Denied: Registration is strictly limited to official Universidad de Manila (@udm.edu.ph) email addresses.');
+  }
+
   const assignedRole: User['role'] = 'student_faculty';
   const userID = 'usr_' + Date.now();
+
+  const collegeInfo = UDM_COLLEGES.find(c => c.id === data.college);
+  const udmUnitFormatted = collegeInfo ? `${data.college} - ${collegeInfo.name.replace('College of ', '')}` : data.college;
 
   const newUser: User = {
     userID,
     name: data.fullName,
     fullName: data.fullName,
-    email: data.email,
+    email: normalizedEmail,
     role: assignedRole,
-    userType: data.role,
+    userType: data.role === 'Faculty/Admin' ? 'Faculty_Admin' : data.role,
     college: data.college,
     idNumber: data.idNumber,
     courseProgram: data.courseProgram,
-    yearLevel: data.yearLevel,
+    yearLevel: data.yearLevel || '1st Year',
     dateRegistered: new Date().toISOString(),
     readingHistory: []
   };
 
+  let needsVerification = false;
+
   if (isSupabaseConfigured && data.password) {
     const { data: authData, error } = await supabase.auth.signUp({
-      email: data.email,
+      email: normalizedEmail,
       password: data.password,
       options: {
         data: {
-          full_name: data.fullName,
-          user_type: data.role,
+          full_name: data.fullName.trim(),
+          role: data.role === 'Faculty_Admin' ? 'Faculty/Admin' : data.role,
+          id_number: data.idNumber.trim(),
+          udm_unit: udmUnitFormatted,
+          course: data.courseProgram.trim(),
+          year_level: data.yearLevel || '1st Year',
+          // Backwards-compatible aliases
           college: data.college,
-          id_number: data.idNumber,
-          course_program: data.courseProgram
+          course_program: data.courseProgram.trim(),
+          user_type: data.role
         }
       }
     });
@@ -632,10 +655,171 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<U
     if (authData.user) {
       newUser.userID = authData.user.id;
     }
+
+    // If session is null and user exists, email confirmation/OTP is pending
+    if (authData.user && !authData.session) {
+      needsVerification = true;
+    }
   }
 
   await saveUser(newUser);
-  return newUser;
+
+  return {
+    user: newUser,
+    needsVerification,
+    message: needsVerification
+      ? `A 6-digit verification code has been sent to ${normalizedEmail}. Please enter it to activate your account.`
+      : 'Account created and verified successfully.'
+  };
+}
+
+/**
+ * Verify 6-digit Signup OTP token sent to user's @udm.edu.ph email
+ */
+export async function verifySignupOTP(email: string, token: string): Promise<User> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanToken = token.trim();
+
+  if (!/^\d{6}$/.test(cleanToken)) {
+    throw new Error('Please enter a valid 6-digit verification code.');
+  }
+
+  if (isSupabaseConfigured) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type: 'signup'
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Invalid or expired verification code. Please request a new one.');
+    }
+
+    if (data.user) {
+      // Fetch institutional profile from profiles or users table
+      let fetchedUser: User | null = null;
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        if (profile) {
+          fetchedUser = {
+            userID: data.user.id,
+            name: profile.full_name || cleanEmail.split('@')[0],
+            fullName: profile.full_name,
+            email: cleanEmail,
+            role: 'student_faculty',
+            userType: (profile.role === 'Faculty/Admin' ? 'Faculty_Admin' : 'Student') as User['userType'],
+            college: (profile.udm_unit?.slice(0, 3) || 'CCS') as UDMCollege,
+            idNumber: profile.id_number || '',
+            courseProgram: profile.course || '',
+            yearLevel: profile.year_level || '1st Year',
+            readingHistory: []
+          };
+        }
+      } catch {}
+
+      if (!fetchedUser) {
+        const meta = data.user.user_metadata || {};
+        fetchedUser = {
+          userID: data.user.id,
+          name: meta.full_name || cleanEmail.split('@')[0],
+          fullName: meta.full_name,
+          email: cleanEmail,
+          role: 'student_faculty',
+          userType: (meta.role === 'Faculty/Admin' ? 'Faculty_Admin' : 'Student') as User['userType'],
+          college: (meta.college || 'CCS') as UDMCollege,
+          idNumber: meta.id_number || '',
+          courseProgram: meta.course || meta.course_program || '',
+          yearLevel: meta.year_level || '1st Year',
+          readingHistory: []
+        };
+      }
+
+      await saveUser(fetchedUser);
+      return fetchedUser;
+    }
+  }
+
+  // Fallback for mock mode
+  const existing = inMemoryUsers.find(u => u.email.toLowerCase() === cleanEmail);
+  if (existing) return existing;
+
+  const fallbackUser: User = {
+    userID: 'usr_' + Date.now(),
+    name: cleanEmail.split('@')[0].toUpperCase(),
+    email: cleanEmail,
+    role: 'student_faculty',
+    userType: 'Student',
+    college: 'CCS',
+    readingHistory: []
+  };
+  await saveUser(fallbackUser);
+  return fallbackUser;
+}
+
+/**
+ * Resend verification OTP code to user's @udm.edu.ph email
+ */
+export async function resendSignupOTP(email: string): Promise<void> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (isSupabaseConfigured) {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: cleanEmail
+    });
+    if (error) throw new Error(error.message);
+  }
+}
+
+/**
+ * Request Password Reset for @udm.edu.ph email
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail.endsWith('@udm.edu.ph')) {
+    throw new Error('Please enter a valid official Universidad de Manila (@udm.edu.ph) email address.');
+  }
+  if (isSupabaseConfigured) {
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${window.location.origin}`
+    });
+    if (error) throw new Error(error.message);
+  }
+}
+
+/**
+ * Verify Recovery OTP for Password Reset
+ */
+export async function verifyPasswordResetOTP(email: string, token: string): Promise<void> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanToken = token.trim();
+  if (isSupabaseConfigured) {
+    const { error } = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type: 'recovery'
+    });
+    if (error) throw new Error(error.message);
+  }
+}
+
+/**
+ * Update authenticated user's password
+ */
+export async function updateUserPassword(newPassword: string): Promise<void> {
+  if (newPassword.length < 6) {
+    throw new Error('Password must be at least 6 characters long.');
+  }
+  if (isSupabaseConfigured) {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function getAllDatabaseUsers(): Promise<User[]> {
