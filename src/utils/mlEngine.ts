@@ -8,7 +8,7 @@
  *    - Collaborative Filtering (User-User Academic Cosine Similarity)
  */
 
-import { Research, User, Recommendation } from '../types';
+import { Research, User, Recommendation, UDM_COLLEGES } from '../types';
 
 const STOPWORDS = new Set([
   'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren\'t', 'as', 'at',
@@ -35,7 +35,8 @@ const STOPWORDS = new Set([
 ]);
 
 /**
- * Tokenize a string into cleaned lowercase alphanumeric terms without stopwords
+ * Tokenize a string into cleaned lowercase alphanumeric terms without stopwords.
+ * Length threshold >= 2 allows indexing acronyms like AI, ML, IT, VR, AR, DB, OS, 5G.
  */
 export function tokenize(text: string): string[] {
   if (!text) return [];
@@ -43,33 +44,42 @@ export function tokenize(text: string): string[] {
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter(token => token.length > 2 && !STOPWORDS.has(token));
+    .filter(token => token.length >= 2 && !STOPWORDS.has(token));
 }
 
 /**
  * Extract tokens representing a research paper for corpus TF-IDF
+ * Indexes: Title, Abstract, Keywords, Authors, Course/Program, and College/Department
  */
 export function getResearchTokens(research: {
   title: string;
   abstract: string;
   keywords: string[];
+  authors?: string[];
   department?: string;
   course?: string;
 }): string[] {
   const titleTokens = tokenize(research.title);
   const abstractTokens = tokenize(research.abstract);
   const keywordTokens = (research.keywords || []).flatMap(k => tokenize(k));
+  const authorTokens = (research.authors || []).flatMap(a => tokenize(a));
   const deptTokens = tokenize(research.department || '');
   const courseTokens = tokenize(research.course || '');
 
-  // Weighted tokens (title & keywords have higher occurrence)
+  // Weighted tokens: title, keywords, authors and course have highest occurrence
   return [
     ...titleTokens,
     ...titleTokens,
+    ...titleTokens,
     ...keywordTokens,
     ...keywordTokens,
-    ...deptTokens,
+    ...keywordTokens,
+    ...authorTokens,
+    ...authorTokens,
+    ...authorTokens,
     ...courseTokens,
+    ...courseTokens,
+    ...deptTokens,
     ...abstractTokens
   ];
 }
@@ -118,15 +128,20 @@ export function calculateTF(tokens: string[]): Record<string, number> {
 }
 
 /**
- * Score research paper relevance against a user search query using TF-IDF
+ * Score research paper relevance against a user search query using TF-IDF and field matching.
+ * Thoroughly searches across: Title, Abstract, Keywords, Authors, and Topics (Course & College).
  */
 export function scoreSearchRelevance(
   query: string,
   research: Research,
   idf: Record<string, number>
 ): number {
-  const queryTokens = tokenize(query);
-  if (queryTokens.length === 0) return 1.0;
+  const rawQuery = (query || '').trim();
+  if (!rawQuery) return 1.0;
+
+  const queryLower = rawQuery.toLowerCase();
+  const queryTokens = tokenize(rawQuery);
+  const effectiveTokens = queryTokens.length > 0 ? queryTokens : [queryLower];
 
   const docTokens = getResearchTokens(research);
   const tf = calculateTF(docTokens);
@@ -134,42 +149,111 @@ export function scoreSearchRelevance(
   let rawScore = 0;
   let matches = 0;
 
-  const titleLower = research.title.toLowerCase();
-  const abstractLower = research.abstract.toLowerCase();
-  const keywordsLower = (research.keywords || []).map(k => k.toLowerCase()).join(' ');
+  const titleLower = (research.title || '').toLowerCase();
+  const abstractLower = (research.abstract || '').toLowerCase();
+  const keywordsArray = (research.keywords || []).map(k => k.toLowerCase());
+  const keywordsLower = keywordsArray.join(' ');
+  const authorsArray = (research.authors || []).map(a => a.toLowerCase());
+  const authorsLower = authorsArray.join(' ');
+  const courseLower = (research.course || '').toLowerCase();
+  const deptLower = (research.department || '').toLowerCase();
+  const collegeObj = UDM_COLLEGES.find(c => c.id === research.department);
+  const collegeNameLower = (collegeObj?.name || '').toLowerCase();
 
-  for (const qToken of queryTokens) {
+  // 1. Direct Full-Query Exact & Substring Matches (Highest precision)
+  if (titleLower.includes(queryLower)) {
+    rawScore += 12.0;
+    matches++;
+  }
+  if (authorsArray.some(a => a.includes(queryLower)) || authorsLower.includes(queryLower)) {
+    rawScore += 12.0;
+    matches++;
+  }
+  if (keywordsArray.some(k => k.includes(queryLower)) || keywordsLower.includes(queryLower)) {
+    rawScore += 10.0;
+    matches++;
+  }
+  if (courseLower.includes(queryLower) || collegeNameLower.includes(queryLower)) {
+    rawScore += 8.0;
+    matches++;
+  }
+  if (deptLower === queryLower || queryLower.includes(deptLower)) {
+    rawScore += 6.0;
+    matches++;
+  }
+  if (abstractLower.includes(queryLower)) {
+    rawScore += 4.0;
+    matches++;
+  }
+
+  // 2. Token-level TF-IDF and Individual Field Matches
+  for (const qToken of effectiveTokens) {
     const tokenTf = tf[qToken] || 0;
-    const tokenIdf = idf[qToken] || Math.log(10); // fallback default IDF
+    const tokenIdf = idf[qToken] || 1.5;
+    let tokenMatched = false;
 
     if (tokenTf > 0) {
-      matches++;
-      rawScore += tokenTf * tokenIdf;
+      tokenMatched = true;
+      rawScore += tokenTf * tokenIdf * 2.0;
     }
 
-    // Exact word or substring bonuses
     if (titleLower.includes(qToken)) {
-      rawScore += 1.5;
+      rawScore += 3.5;
+      tokenMatched = true;
+    }
+    if (authorsLower.includes(qToken)) {
+      rawScore += 4.0;
+      tokenMatched = true;
     }
     if (keywordsLower.includes(qToken)) {
-      rawScore += 1.2;
+      rawScore += 3.0;
+      tokenMatched = true;
+    }
+    if (courseLower.includes(qToken) || collegeNameLower.includes(qToken)) {
+      rawScore += 2.5;
+      tokenMatched = true;
     }
     if (abstractLower.includes(qToken)) {
-      rawScore += 0.3;
+      rawScore += 1.0;
+      tokenMatched = true;
+    }
+    if (deptLower === qToken || deptLower.includes(qToken)) {
+      rawScore += 3.0;
+      tokenMatched = true;
+    }
+
+    if (tokenMatched) {
+      matches++;
     }
   }
 
-  // College acronym match bonus (e.g. searching "CCS" or "CAS")
-  if (query.toUpperCase().includes(research.department)) {
-    rawScore += 2.0;
+  // 3. Multi-token coverage requirement
+  if (effectiveTokens.length > 1) {
+    const matchedCount = effectiveTokens.filter(t =>
+      titleLower.includes(t) ||
+      authorsLower.includes(t) ||
+      keywordsLower.includes(t) ||
+      courseLower.includes(t) ||
+      collegeNameLower.includes(t) ||
+      abstractLower.includes(t) ||
+      deptLower.includes(t)
+    ).length;
+
+    // Discard false positives if none of the query tokens matched and no phrase match
+    if (matchedCount === 0 && !titleLower.includes(queryLower) && !authorsLower.includes(queryLower) && !keywordsLower.includes(queryLower)) {
+      return 0;
+    }
+
+    // Scale by fraction of query tokens satisfied
+    rawScore = rawScore * (matchedCount / effectiveTokens.length);
   }
 
   if (matches === 0 && rawScore === 0) {
     return 0;
   }
 
-  // Normalize score between 0 and 100
-  const normalized = Math.min(100, Math.round((rawScore / (queryTokens.length * 2.5)) * 100));
+  // Normalize score between 1 and 100
+  const normalized = Math.min(100, Math.round((rawScore / (effectiveTokens.length * 3.0)) * 100));
   return Math.max(1, normalized);
 }
 

@@ -263,10 +263,14 @@ app.get('/api/research', (req: Request, res: Response) => {
   const idf = calculateIDF(corpusTokens);
 
   // Score relevance for each item
-  const scored = filtered.map(item => ({
+  let scored = filtered.map(item => ({
     ...item,
     relevanceScore: scoreSearchRelevance(query, item, idf)
   }));
+
+  if (query.trim()) {
+    scored = scored.filter(item => (item.relevanceScore || 0) > 0);
+  }
 
   // Sort results
   if (sortBy === 'relevance' && query.trim()) {
