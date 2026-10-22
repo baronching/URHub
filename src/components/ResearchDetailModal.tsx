@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Research, User, AccessRequest, UDM_COLLEGES } from '../types';
-import { generateContextualAcademicAnswer } from '../utils/researchAiAssistant';
 import { ManuscriptReader } from './ManuscriptReader';
 import jsPDF from 'jspdf';
 import {
@@ -23,8 +22,6 @@ import {
   AlertCircle,
   XCircle,
   UserCheck,
-  Bot,
-  Send,
   Lightbulb,
   RefreshCw,
   Copy,
@@ -60,9 +57,6 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   const [aiSummary, setAiSummary] = useState<any | null>(null);
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string; time: string }>>([]);
-  const [chatInput, setChatInput] = useState<string>('');
-  const [chatLoading, setChatLoading] = useState<boolean>(false);
   const [copiedSummary, setCopiedSummary] = useState<boolean>(false);
 
   // Reset AI state on research paper change
@@ -70,8 +64,6 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
     setAiSummary(null);
     setAiLoading(false);
     setAiError('');
-    setChatMessages([]);
-    setChatInput('');
     setCopiedSummary(false);
   }, [research?.researchID]);
 
@@ -156,78 +148,6 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
       });
     } finally {
       setAiLoading(false);
-    }
-  };
-
-  // Send message to Gemini AI Research Assistant
-  const handleSendChat = async (presetText?: string) => {
-    const text = (presetText || chatInput).trim();
-    if (!text || !research || chatLoading) return;
-
-    const userMsg = {
-      role: 'user' as const,
-      text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setChatMessages(prev => [...prev, userMsg]);
-    if (!presetText) setChatInput('');
-    setChatLoading(true);
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          message: text,
-          history: chatMessages.slice(-6).map(m => ({ role: m.role, text: m.text })),
-          research: {
-            title: research.title,
-            abstract: research.abstract,
-            department: research.department,
-            course: research.course,
-            authors: research.authors,
-            keywords: research.keywords,
-            year: research.year
-          }
-        })
-      });
-      clearTimeout(timeoutId);
-
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
-        const tailoredAnswer = generateContextualAcademicAnswer(text, research);
-        const assistantMsg = {
-          role: 'assistant' as const,
-          text: tailoredAnswer,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setChatMessages(prev => [...prev, assistantMsg]);
-        return;
-      }
-      const data = await res.json();
-      if (!data.reply) throw new Error(data.error || 'Failed to get answer');
-      const assistantMsg = {
-        role: 'assistant' as const,
-        text: data.reply,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setChatMessages(prev => [...prev, assistantMsg]);
-    } catch {
-      // Resilient fallback: Generate distinct, contextual academic analysis on the client
-      const tailoredAnswer = generateContextualAcademicAnswer(text, research);
-      const assistantMsg = {
-        role: 'assistant' as const,
-        text: tailoredAnswer,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setChatMessages(prev => [...prev, assistantMsg]);
-    } finally {
-      setChatLoading(false);
     }
   };
 
@@ -914,107 +834,6 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   </button>
                 </div>
               )}
-
-              {/* Section 2: Interactive AI Q&A Assistant */}
-              <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center space-x-2">
-                    <Bot className="w-5 h-5 text-[#1a4731]" />
-                    <div>
-                      <h4 className="text-sm font-bold text-[#1a4731]">Ask AI About This Research</h4>
-                      <p className="text-[11px] text-slate-500">Ask questions in English or Tagalog about methodologies, findings, or applications.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Preset Suggested Questions */}
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    "Ano ang pangunahing suliranin at solusyon ng research na ito?",
-                    "How can this study be applied in Manila or UDM?",
-                    "What are the core methodologies and algorithms?",
-                    "What are the research gaps and future directions?"
-                  ].map((q, idx) => (
-                    <button
-                      key={idx}
-                      disabled={chatLoading}
-                      onClick={() => handleSendChat(q)}
-                      className="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-[#1a4731]/10 text-slate-700 hover:text-[#1a4731] border border-slate-200 transition-colors cursor-pointer disabled:opacity-50 text-left"
-                    >
-                      "{q}"
-                    </button>
-                  ))}
-                </div>
-
-                {/* Chat Thread */}
-                <div className="space-y-3 max-h-72 overflow-y-auto p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  {chatMessages.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-slate-400 space-y-1">
-                      <Bot className="w-8 h-8 mx-auto text-slate-300" />
-                      <p className="font-semibold text-slate-500">No questions asked yet.</p>
-                      <p>Click any suggested question above or type your inquiry below.</p>
-                    </div>
-                  ) : (
-                    chatMessages.map((msg, idx) => (
-                      <div
-                        key={idx}
-                        className={`flex items-start space-x-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        {msg.role === 'assistant' && (
-                          <div className="w-6 h-6 rounded-full bg-[#1a4731] text-[#c9a84c] flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
-                            AI
-                          </div>
-                        )}
-                        <div
-                          className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-xs ${
-                            msg.role === 'user'
-                              ? 'bg-[#1a4731] text-white shadow-xs'
-                              : 'bg-white text-slate-800 border border-slate-200 shadow-xs'
-                          }`}
-                        >
-                          <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                          <span className={`block text-[9px] mt-1 text-right ${msg.role === 'user' ? 'text-white/60' : 'text-slate-400'}`}>
-                            {msg.time}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-
-                  {chatLoading && (
-                    <div className="flex items-center space-x-2 text-xs text-[#1a4731] font-semibold py-1">
-                      <div className="w-4 h-4 border-2 border-[#1a4731] border-t-transparent rounded-full animate-spin" />
-                      <span>Gemini is generating response...</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Chat Input */}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSendChat();
-                  }}
-                  className="flex items-center space-x-2"
-                >
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask a question about this research paper..."
-                    disabled={chatLoading}
-                    className="flex-1 bg-slate-50 border border-slate-200 focus:border-[#1a4731] rounded-lg px-3.5 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!chatInput.trim() || chatLoading}
-                    className="px-4 py-2.5 rounded-lg bg-[#1a4731] hover:bg-[#123323] text-white text-xs font-bold flex items-center space-x-1.5 transition-all disabled:opacity-40 cursor-pointer"
-                  >
-                    <Send className="w-3.5 h-3.5 text-[#c9a84c]" />
-                    <span>Ask</span>
-                  </button>
-                </form>
-              </div>
             </div>
             )
           ) : (
