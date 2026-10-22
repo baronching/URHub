@@ -222,25 +222,6 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
                 <p className="font-bold text-slate-900 text-sm">{research.authors.join(', ')}</p>
                 <p className="text-slate-500 pt-1">Academic Year {research.year || '2025'}</p>
               </div>
-
-              {/* Committee Sign-Off Block */}
-              <div className="pt-6 border-t border-slate-200 mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4 text-left font-sans text-[10px] sm:text-[11px]">
-                <div className="border border-slate-200 p-2.5 rounded bg-slate-50">
-                  <p className="font-bold text-slate-800">DR. EMILIANO T. REYES</p>
-                  <p className="text-slate-500">Thesis & Capstone Adviser</p>
-                  <p className="text-emerald-700 font-bold mt-1">✓ Endorsed for Defense</p>
-                </div>
-                <div className="border border-slate-200 p-2.5 rounded bg-slate-50">
-                  <p className="font-bold text-slate-800">DR. MARIA LORRAINE TAN</p>
-                  <p className="text-slate-500">Department Chairperson</p>
-                  <p className="text-emerald-700 font-bold mt-1">✓ Approved for Repository</p>
-                </div>
-                <div className="border border-slate-200 p-2.5 rounded bg-slate-50 col-span-2 sm:col-span-1">
-                  <p className="font-bold text-slate-800">URELIA OFFICE ARCHIVES</p>
-                  <p className="text-slate-500">Research & Extension Division</p>
-                  <p className="text-emerald-700 font-bold mt-1">✓ Official Accession No: {research.researchID}</p>
-                </div>
-              </div>
             </div>
           )}
 
