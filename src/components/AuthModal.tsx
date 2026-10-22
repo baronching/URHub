@@ -24,7 +24,8 @@ import {
   KeyRound,
   ArrowLeft,
   RefreshCw,
-  Send
+  Send,
+  AlertTriangle
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -344,13 +345,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                   setErrorMsg('');
                   setSuccessMsg('');
                 }}
-                className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer ${
+                className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   viewMode === 'register'
                     ? 'bg-white text-[#1a4731] shadow-xs border border-slate-200 font-extrabold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Register UDM Account
+                <span>Register UDM Account</span>
+                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold">
+                  Unavailable
+                </span>
               </button>
             </div>
           )}
@@ -372,44 +376,76 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
           )}
 
           {/* ========================================================= */}
-          {/* VIEW 1 & 2: SIGN IN & REGISTRATION FORMS */}
+          {/* VIEW 1: REGISTRATION DISABLED NOTICE */}
           {/* ========================================================= */}
-          {(viewMode === 'signin' || viewMode === 'register') && (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {viewMode === 'register' && (
-                <>
-                  {/* Full Name */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
-                      <UserCheck className="w-3.5 h-3.5 text-[#1a4731]" />
-                      <span>Full Name *</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={e => setFullName(e.target.value)}
-                      placeholder="Juan Dela Cruz"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
-                    />
+          {viewMode === 'register' && (
+            <div className="space-y-5 animate-in fade-in duration-200 py-2">
+              {/* Technical Issue Maintenance Notice */}
+              <div className="p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3.5 shadow-xs">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 rounded-xl bg-amber-200/90 text-amber-900 shrink-0">
+                    <AlertTriangle className="w-6 h-6 text-amber-800" />
                   </div>
-                </>
-              )}
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-amber-900">
+                      Registration Temporarily Unavailable
+                    </h3>
+                    <p className="text-xs text-amber-800 font-medium">
+                      Universidad de Manila Single Sign-On Portal
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-amber-950/90 leading-relaxed font-medium">
+                  Due to technical issues and ongoing university database synchronization, online self-registration of new accounts is currently unavailable.
+                </p>
+
+                <div className="p-3.5 rounded-xl bg-white/90 border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                  <p className="font-bold text-amber-950 flex items-center gap-1.5">
+                    <span>Notice on Institutional Accounts:</span>
+                  </p>
+                  <p className="leading-relaxed">
+                    Official accounts for <strong>Students</strong>, <strong>Faculty</strong>, and <strong>URELIA Staff</strong> are provisioned manually by the university administrator. Please use the credentials issued to you to sign in.
+                  </p>
+                </div>
+
+                <div className="text-[11px] text-amber-850 font-medium pt-1">
+                  If you do not have your login details yet, please coordinate with the <strong>URELIA Office</strong> or your College Department.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('signin');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
+                className="w-full py-3 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md transition-all cursor-pointer text-center"
+              >
+                Proceed to Sign In
+              </button>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* VIEW 2: STANDARD MANUAL SIGN IN */}
+          {/* ========================================================= */}
+          {viewMode === 'signin' && (
+            <form onSubmit={handleSubmit} className="space-y-4">
 
               {/* Email Address */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                   <Mail className="w-3.5 h-3.5 text-[#1a4731]" />
-                  <span>
-                    {viewMode === 'register' ? 'UDM Institutional Email * (@udm.edu.ph)' : 'UDM Email, Username, or Student/Faculty ID *'}
-                  </span>
+                  <span>UDM Email, Username, or Student/Faculty ID *</span>
                 </label>
                 <input
-                  type={viewMode === 'register' ? 'email' : 'text'}
+                  type="text"
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder={viewMode === 'register' ? 'yourname@udm.edu.ph' : 'e.g. blching@udm.edu.ph, blching, or 23-22-005'}
+                  placeholder="e.g. jdelacruz@udm.edu.ph, msantos@udm.edu.ph, areyes.urelia@udm.edu.ph"
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
                 />
               </div>
@@ -421,20 +457,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     <Lock className="w-3.5 h-3.5 text-[#1a4731]" />
                     <span>Password *</span>
                   </label>
-                  {viewMode === 'signin' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setViewMode('forgot_password');
-                        setResetEmail(email.includes('@udm.edu.ph') ? email : '');
-                        setErrorMsg('');
-                        setSuccessMsg('');
-                      }}
-                      className="text-[11px] text-[#1a4731] hover:underline font-semibold cursor-pointer"
-                    >
-                      Forgot password?
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('forgot_password');
+                      setResetEmail(email.includes('@udm.edu.ph') ? email : '');
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                    className="text-[11px] text-[#1a4731] hover:underline font-semibold cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
                 <input
                   type="password"
@@ -446,120 +480,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 />
               </div>
 
-              {/* Confirm Password (Registration only) */}
-              {viewMode === 'register' && (
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
-                    <Lock className="w-3.5 h-3.5 text-[#1a4731]" />
-                    <span>Confirm Password *</span>
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
-                  />
-                </div>
-              )}
-
-              {/* Registration Specific Fields */}
-              {viewMode === 'register' && (
-                <>
-                  {/* Role & College Row */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
-                        <GraduationCap className="w-3.5 h-3.5 text-[#1a4731]" />
-                        <span>Role *</span>
-                      </label>
-                      <select
-                        value={userType}
-                        onChange={e => setUserType(e.target.value as 'Student' | 'Faculty_Admin')}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
-                      >
-                        <option value="Student">Student</option>
-                        <option value="Faculty_Admin">Faculty/Admin</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
-                        <Briefcase className="w-3.5 h-3.5 text-[#1a4731]" />
-                        <span>UDM Unit *</span>
-                      </label>
-                      <select
-                        value={college}
-                        onChange={e => setCollege(e.target.value as UDMCollege)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
-                      >
-                        {UDM_COLLEGES.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.id} - {c.name.replace('College of ', '')}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Student/Faculty ID Number */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
-                      <IdCard className="w-3.5 h-3.5 text-[#1a4731]" />
-                      <span>Student / Faculty ID Number *</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={idNumber}
-                      onChange={e => setIdNumber(e.target.value)}
-                      placeholder={userType === 'Student' ? '2023-10452' : 'FAC-2021-08'}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
-                    />
-                  </div>
-
-                  {/* Course/Program & Year Level */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
-                        <BookOpen className="w-3.5 h-3.5 text-[#1a4731]" />
-                        <span>Course / Program *</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={courseProgram}
-                        onChange={e => setCourseProgram(e.target.value)}
-                        placeholder="BS Information Technology"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
-                      />
-                    </div>
-
-                    {/* Year Level (Only for Students) */}
-                    {userType === 'Student' && (
-                      <div className="animate-in fade-in duration-200">
-                        <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
-                          <GraduationCap className="w-3.5 h-3.5 text-[#1a4731]" />
-                          <span>Year Level *</span>
-                        </label>
-                        <select
-                          value={yearLevel}
-                          onChange={e => setYearLevel(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
-                        >
-                          <option value="1st Year">1st Year</option>
-                          <option value="2nd Year">2nd Year</option>
-                          <option value="3rd Year">3rd Year</option>
-                          <option value="4th Year">4th Year</option>
-                          <option value="5th Year">5th Year</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
               {/* Submit Button */}
               <button
                 type="submit"
@@ -569,8 +489,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 <span>
                   {isLoading
                     ? 'Authenticating with UDM Single Sign-On...'
-                    : viewMode === 'register'
-                    ? 'Register UDM Account'
                     : 'Sign In to UDM-ResearchHub'}
                 </span>
               </button>
