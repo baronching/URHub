@@ -12,6 +12,7 @@ import { generateHybridRecommendations, calculateIDF, getResearchTokens, scoreSe
 import { generateContextualAcademicAnswer } from './src/utils/researchAiAssistant';
 import { Research, Submission, User, SystemSettings, UDMCollege, UDM_COLLEGES } from './src/types';
 import { createClient } from '@supabase/supabase-js';
+import nodemailer from 'nodemailer';
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -51,18 +52,100 @@ let researchDB: Research[] = [...INITIAL_RESEARCH];
 let submissionsDB: Submission[] = [...INITIAL_SUBMISSIONS];
 let settingsDB: SystemSettings = { ...INITIAL_SYSTEM_SETTINGS };
 
+// Hostinger SMTP Transporter Configuration
+const getHostingerTransporter = () => {
+  const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
+  const port = Number(process.env.SMTP_PORT) || 465;
+  const user = process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER || '';
+  const pass = process.env.SMTP_PASS || process.env.HOSTINGER_EMAIL_PASS || '';
+
+  if (!user || !pass) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465, // true for 465, false for 587
+    auth: { user, pass },
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
+};
+
 // ==========================================
 // RESTFUL API ENDPOINTS
 // ==========================================
 
-// Health Check
+// Health Check & Hostinger SMTP Status
 app.get('/api/health', (req: Request, res: Response) => {
+  const isSmtpConfigured = Boolean(
+    (process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER) &&
+    (process.env.SMTP_PASS || process.env.HOSTINGER_EMAIL_PASS)
+  );
+
   res.json({
     status: 'online',
     system: 'UDM-ResearchHub API',
     institution: 'Universidad de Manila - URELIA Office',
+    smtp: {
+      provider: 'Hostinger SMTP (smtp.hostinger.com)',
+      configured: isSmtpConfigured,
+      sender: process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER || 'Not configured yet'
+    },
     timestamp: new Date().toISOString()
   });
+});
+
+// Test Hostinger SMTP Connection / Send Test Email
+app.post('/api/smtp/test', async (req: Request, res: Response) => {
+  const { toEmail } = req.body;
+  const transporter = getHostingerTransporter();
+
+  if (!transporter) {
+    return res.status(400).json({
+      success: false,
+      error: 'Hostinger SMTP is not yet configured. Please set SMTP_USER and SMTP_PASS in environment variables.'
+    });
+  }
+
+  const targetEmail = toEmail || process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER;
+
+  try {
+    // 1. Verify credentials with smtp.hostinger.com
+    await transporter.verify();
+
+    // 2. Send test message
+    const info = await transporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME || 'UDM ResearchHub'}" <${process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER}>`,
+      to: targetEmail,
+      subject: 'UDM-ResearchHub Hostinger SMTP Connection Verified',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f8fafc; border-radius: 10px;">
+          <h2 style="color: #1a4731; margin-top: 0;">Universidad de Manila - URELIA ResearchHub</h2>
+          <p>This is a confirmation that your <strong>Hostinger SMTP</strong> email server (<code>smtp.hostinger.com</code>) is successfully connected to UDM-ResearchHub!</p>
+          <div style="padding: 12px; background-color: #e6f4ea; border-left: 4px solid #1a4731; border-radius: 4px; margin: 15px 0;">
+            <p style="margin: 0; color: #1a4731; font-weight: bold;">Status: Active & Operational</p>
+            <p style="margin: 5px 0 0 0; font-size: 13px; color: #374151;">All institutional student and faculty verification codes will be delivered through this channel.</p>
+          </div>
+          <p style="font-size: 12px; color: #6b7280;">Universidad de Manila • Research and Extension Services Office (URELIA)</p>
+        </div>
+      `
+    });
+
+    res.json({
+      success: true,
+      message: `Test email successfully sent to ${targetEmail} via Hostinger SMTP!`,
+      messageId: info.messageId
+    });
+  } catch (err: any) {
+    console.error('Hostinger SMTP Test Error:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message || 'Hostinger SMTP authentication or connection failed'
+    });
+  }
 });
 
 // Authentication: Login with UDM Email
