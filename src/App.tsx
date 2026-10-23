@@ -15,7 +15,7 @@ import { SuperAdminManagement } from './components/SuperAdminManagement';
 import { SDGSection } from './components/SDGSection';
 import { AuthModal } from './components/AuthModal';
 import { PrivacyConsentModal } from './components/PrivacyConsentModal';
-import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck, Download, Loader2 } from 'lucide-react';
+import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck, Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { generateBatchAbstractsPdf } from './utils/abstractPdfGenerator';
 import {
@@ -75,6 +75,15 @@ export default function App() {
     keyword: 'ALL',
     sortBy: 'relevance'
   });
+
+  // 12 researches per page pagination
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 12;
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
 
   // Protect Admin tabs: "Review Queue", "Analytics & Reports", and "User Management" are exclusively for URELIA
   useEffect(() => {
@@ -449,6 +458,38 @@ export default function App() {
     recordResearchDownload(paper.researchID);
   };
 
+  // Pagination Calculations (12 researches per page)
+  const totalPages = Math.max(1, Math.ceil(filteredResearchList.length / ITEMS_PER_PAGE));
+  const activeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (activeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredResearchList.length);
+
+  const paginatedResearchList = useMemo(() => {
+    return filteredResearchList.slice(startIndex, endIndex);
+  }, [filteredResearchList, startIndex, endIndex]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setCurrentPage(newPage);
+    const target = document.getElementById('search-filter-section');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const getPaginationPages = (current: number, total: number): (number | string)[] => {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', total];
+    }
+    if (current >= total - 3) {
+      return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  };
+
   // Filtered IDs for batch selection
   const filteredIds = useMemo(() => filteredResearchList.map(r => r.researchID), [filteredResearchList]);
   const selectedFilteredCount = useMemo(() => {
@@ -757,6 +798,73 @@ export default function App() {
               </div>
             )}
 
+            {/* Pagination Controls (In between Select All in Results bar and Researches Grid - 12 per page) */}
+            {filteredResearchList.length > 0 && (
+              <div className="bg-white rounded-xl px-4 py-3 sm:py-3.5 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 select-none">
+                <div className="text-xs text-slate-600 flex items-center space-x-2">
+                  <span className="font-medium text-slate-500">
+                    Showing <span className="font-bold text-[#1a4731]">{startIndex + 1}–{endIndex}</span> of <span className="font-bold text-slate-900">{filteredResearchList.length}</span> researches
+                  </span>
+                  <span className="text-slate-300">•</span>
+                  <span className="font-semibold text-slate-700">
+                    Page <span className="text-[#1a4731] font-bold">{activeCurrentPage}</span> of <span className="font-bold">{totalPages}</span>
+                  </span>
+                  <span className="text-slate-300 hidden sm:inline">•</span>
+                  <span className="text-[11px] text-slate-400 hidden sm:inline font-medium">12 per page</span>
+                </div>
+
+                <div className="flex items-center space-x-1 sm:space-x-1.5 flex-wrap justify-center">
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(activeCurrentPage - 1)}
+                    disabled={activeCurrentPage === 1}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 border transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed bg-white text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-slate-600" />
+                    <span className="hidden xs:inline">Prev</span>
+                  </button>
+
+                  {getPaginationPages(activeCurrentPage, totalPages).map((p, idx) => {
+                    if (p === '...') {
+                      return (
+                        <span key={`top-dots-${idx}`} className="px-2 py-1 text-slate-400 text-xs font-bold select-none">
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = p as number;
+                    const isActive = pageNum === activeCurrentPage;
+                    return (
+                      <button
+                        key={`top-page-${pageNum}`}
+                        type="button"
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`min-w-8 h-8 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                          isActive
+                            ? 'bg-[#1a4731] text-white shadow-xs ring-2 ring-[#c9a84c]'
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(activeCurrentPage + 1)}
+                    disabled={activeCurrentPage === totalPages}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 border transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed bg-white text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
+                    title="Next Page"
+                  >
+                    <span className="hidden xs:inline">Next</span>
+                    <ChevronRight className="w-4 h-4 text-slate-600" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Research Cards Grid */}
             {filteredResearchList.length === 0 ? (
               <div className="p-12 text-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -781,17 +889,78 @@ export default function App() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredResearchList.map((paper) => (
-                  <ResearchCard
-                    key={paper.researchID}
-                    research={paper}
-                    isSelected={selectedResearchIds.includes(paper.researchID)}
-                    onToggleSelect={handleToggleSelectResearch}
-                    onSelect={handleSelectResearch}
-                    onDownloadAbstract={handleDownloadAbstract}
-                  />
-                ))}
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedResearchList.map((paper) => (
+                    <ResearchCard
+                      key={paper.researchID}
+                      research={paper}
+                      isSelected={selectedResearchIds.includes(paper.researchID)}
+                      onToggleSelect={handleToggleSelectResearch}
+                      onSelect={handleSelectResearch}
+                      onDownloadAbstract={handleDownloadAbstract}
+                    />
+                  ))}
+                </div>
+
+                {/* Bottom Pagination Controls for multi-page lists */}
+                {totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white rounded-xl px-4 py-3 sm:py-3.5 border border-slate-200 shadow-xs select-none">
+                    <div className="text-xs text-slate-500">
+                      Showing page <span className="font-bold text-[#1a4731]">{activeCurrentPage}</span> of <span className="font-bold text-slate-800">{totalPages}</span> ({filteredResearchList.length} total researches)
+                    </div>
+
+                    <div className="flex items-center space-x-1 sm:space-x-1.5 flex-wrap justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(activeCurrentPage - 1)}
+                        disabled={activeCurrentPage === 1}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 border transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed bg-white text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft className="w-4 h-4 text-slate-600" />
+                        <span className="hidden xs:inline">Prev</span>
+                      </button>
+
+                      {getPaginationPages(activeCurrentPage, totalPages).map((p, idx) => {
+                        if (p === '...') {
+                          return (
+                            <span key={`btm-dots-${idx}`} className="px-2 py-1 text-slate-400 text-xs font-bold select-none">
+                              ...
+                            </span>
+                          );
+                        }
+                        const pageNum = p as number;
+                        const isActive = pageNum === activeCurrentPage;
+                        return (
+                          <button
+                            key={`btm-page-${pageNum}`}
+                            type="button"
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`min-w-8 h-8 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                              isActive
+                                ? 'bg-[#1a4731] text-white shadow-xs ring-2 ring-[#c9a84c]'
+                                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(activeCurrentPage + 1)}
+                        disabled={activeCurrentPage === totalPages}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 border transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed bg-white text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
+                        title="Next Page"
+                      >
+                        <span className="hidden xs:inline">Next</span>
+                        <ChevronRight className="w-4 h-4 text-slate-600" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
