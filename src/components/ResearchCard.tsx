@@ -119,20 +119,20 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
       </div>
 
       {/* Footer Action Buttons */}
-      <div className="pt-3 sm:pt-4 border-t border-slate-100 flex flex-col xs:flex-row sm:flex-row items-stretch sm:items-center justify-between gap-2">
+      <div className="pt-3 sm:pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
         <button
+          type="button"
           onClick={(e) => onDownloadAbstract(research, e)}
-          className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-50 hover:bg-slate-100 text-[#1a4731] border border-slate-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-50 hover:bg-slate-100 text-[#1a4731] border border-slate-200 flex items-center space-x-1.5 transition-all cursor-pointer"
         >
           <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
           <span>Download Abstract</span>
         </button>
 
-        <button className="px-3.5 py-2 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-1.5 transition-all group-hover:translate-x-0.5 cursor-pointer">
-          <FileText className="w-3.5 h-3.5 text-[#c9a84c]" />
-          <span>View Paper</span>
-          <ArrowUpRight className="w-3.5 h-3.5 text-[#c9a84c]" />
-        </button>
+        <span className="text-xs font-bold text-[#1a4731] flex items-center space-x-1 group-hover:text-[#c9a84c] transition-colors select-none">
+          <span>View Details</span>
+          <ArrowUpRight className="w-3.5 h-3.5" />
+        </span>
       </div>
     </div>
   );

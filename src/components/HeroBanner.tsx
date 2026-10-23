@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Sparkles, FilePlus, Building2, ShieldCheck, GraduationCap } from 'lucide-react';
+import { BookOpen, Sparkles, Building2, ShieldCheck, GraduationCap } from 'lucide-react';
 
 interface HeroBannerProps {
   totalPapers: number;
@@ -67,16 +67,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <BookOpen className="w-4 h-4" />
             <span>Explore Research Archive</span>
           </button>
-
-          {canSubmit && (
-            <button
-              onClick={onOpenSubmission}
-              className="px-5 py-3 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs sm:text-sm backdrop-blur-sm flex items-center space-x-2 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-            >
-              <FilePlus className="w-4 h-4 text-[#c9a84c]" />
-              <span>Submit Research Paper</span>
-            </button>
-          )}
         </div>
       </div>
     </div>

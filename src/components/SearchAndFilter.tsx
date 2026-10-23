@@ -1,6 +1,6 @@
 import React from 'react';
 import { SearchFilters, UDMCollege, UDM_COLLEGES } from '../types';
-import { Search, Filter, RotateCcw, Building2, Users } from 'lucide-react';
+import { Search, Filter, RotateCcw, Building2 } from 'lucide-react';
 
 interface SearchAndFilterProps {
   filters: SearchFilters;
@@ -21,10 +21,6 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
   const handleCollegeSelect = (college: UDMCollege | 'ALL') => {
     onChangeFilters({ ...filters, college });
-  };
-
-  const handleAuthorCategorySelect = (authorCategory: 'ALL' | 'Student' | 'Faculty_Admin') => {
-    onChangeFilters({ ...filters, authorCategory });
   };
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -82,37 +78,6 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded select-none pointer-events-none">
             TF-IDF Search
           </span>
-        </div>
-      </div>
-
-      {/* Research Origin Filter Tabs (Student vs Faculty & Administration) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-        <div className="flex items-center space-x-1.5 text-slate-700 font-bold px-1">
-          <Users className="w-3.5 h-3.5 text-[#1a4731]" />
-          <span>Research Classification:</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {[
-            { id: 'ALL' as const, label: 'All Researches' },
-            { id: 'Student' as const, label: 'Student Capstones & Theses' },
-            { id: 'Faculty_Admin' as const, label: 'Faculty & Administration Researches' }
-          ].map(tab => {
-            const isTabActive = (filters.authorCategory || 'ALL') === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleAuthorCategorySelect(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer select-none ${
-                  isTabActive
-                    ? 'bg-[#1a4731] text-white shadow-xs ring-2 ring-[#1a4731]/20'
-                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
         </div>
       </div>
 

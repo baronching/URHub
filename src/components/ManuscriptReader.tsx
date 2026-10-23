@@ -59,7 +59,7 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
   return (
     <div className="space-y-4 select-none" onContextMenu={(e) => e.preventDefault()}>
       {/* Top Banner: Protected View-Only & Policy Information */}
-      <div className="bg-emerald-50/90 border border-emerald-200/90 p-3 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
+      <div className="bg-emerald-50/90 border border-emerald-200/90 p-3 sm:p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
         <div className="flex items-center space-x-2.5 min-w-0">
           <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
             <Lock className="w-4 h-4 text-emerald-700" />
@@ -72,18 +72,10 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
               </span>
             </h4>
             <p className="text-emerald-800 text-[11px] truncate">
-              As per URELIA Office policy: Full paper is viewable on our website; only the official abstract is downloadable.
+              As per URELIA Office policy: Full paper is viewable on our website; use the Download Abstract PDF button above for the official abstract document.
             </p>
           </div>
         </div>
-
-        <button
-          onClick={onDownloadAbstract}
-          className="self-start sm:self-center px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer shrink-0 transition-all active:scale-98"
-        >
-          <FileText className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
-          <span>Download Abstract PDF</span>
-        </button>
       </div>
 
       {/* Reader Control Bar: Chapter jumps, Zoom, and Page Navigator */}

@@ -473,10 +473,10 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                     </div>
                     <div className="min-w-0">
                       <h4 className="font-bold text-slate-900 text-xs sm:text-sm mb-0.5">
-                        Sign In Required for Full Paper, AI Assistant & Abstract Download
+                        Sign In Required for Full Paper & Abstract Download
                       </h4>
                       <p className="text-slate-600 leading-normal">
-                        Abstract and metadata are publicly readable. Log in with your official UDM account to read the full 14-page manuscript, chat with the AI assistant, or download the abstract PDF.
+                        Abstract and metadata are publicly readable. Log in with your official UDM account to read the full 14-page manuscript or download the abstract PDF.
                       </p>
                     </div>
                   </div>
@@ -491,7 +491,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   )}
                 </div>
               ) : (
-                <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
+                <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
                   <div className="flex items-center space-x-2.5 min-w-0">
                     <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
                       <BookOpen className="w-4 h-4 text-emerald-700" />
@@ -501,28 +501,9 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                         Full Research Manuscript Available
                       </p>
                       <p className="text-emerald-700 text-[11px] truncate">
-                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email}) • 14 Pages viewable online
+                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email}) • View the complete 14-page manuscript in the <strong>Full Paper</strong> tab.
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => setActiveTab('view_only_reader')}
-                      className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
-                    >
-                      <BookOpen className="w-4 h-4 text-[#c9a84c]" />
-                      <span>Read Full Research (14 Pages)</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTab('ai_assistant');
-                        if (!aiSummary && !aiLoading) fetchAiSummary();
-                      }}
-                      className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs font-bold bg-white text-[#1a4731] border border-[#1a4731]/40 hover:bg-emerald-50/50 shadow-2xs flex items-center justify-center space-x-1.5 cursor-pointer transition-all"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-[#c9a84c]" />
-                      <span>AI Assistant</span>
-                    </button>
                   </div>
                 </div>
               )}
