@@ -20,7 +20,7 @@ async function getApp() {
 }
 
 export default async function handler(req: any, res: any) {
-  if (req.url && !req.url.startsWith('/api')) {
+  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/auth')) {
     req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
   }
   const app = await getApp();

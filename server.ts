@@ -169,18 +169,15 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   let user = usersDB.find(u => u.email.toLowerCase() === cleanEmail);
 
   if (!user) {
-    // Auto-provision student/faculty account for valid UDM email credentials
-    user = {
-      userID: `USR-UDM-${Date.now().toString().slice(-4)}`,
-      name: cleanEmail.split('@')[0].replace('.', ' ').toUpperCase(),
-      email: cleanEmail,
-      password: password,
-      role: 'student_faculty',
-      college: 'CCS',
-      course: 'BS in Computer Science',
-      readingHistory: []
-    };
-    usersDB.push(user);
+    return res.status(401).json({
+      error: 'Account not found. Please register and confirm your official @udm.edu.ph email address before signing in.'
+    });
+  }
+
+  if (user.password && user.password !== password) {
+    return res.status(401).json({
+      error: 'Invalid password. Please verify your credentials or use "Forgot password?".'
+    });
   }
 
   const { password: _, ...safeUser } = user;
@@ -232,6 +229,53 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
     user: safeUser
   });
 });
+
+// Secure Auth Callback Route Handler: token_hash, code, or OTP verification
+const handleAuthCallback = async (req: Request, res: Response) => {
+  const token_hash = (req.query.token_hash as string) || '';
+  const code = (req.query.code as string) || '';
+  const type = ((req.query.type as string) || 'signup') as any;
+  const errorDescription = (req.query.error_description as string) || '';
+  const errorCode = (req.query.error_code as string) || (req.query.error as string) || '';
+
+  // Handle explicit error sent from Supabase (e.g. otp_expired)
+  if (errorCode || errorDescription) {
+    const isExpired = errorCode.includes('expired') || errorDescription.toLowerCase().includes('expired');
+    const redirectParam = isExpired ? 'error=expired_link' : `error=${encodeURIComponent(errorDescription || errorCode)}`;
+    return res.redirect(`https://udmrhub.site/?${redirectParam}`);
+  }
+
+  if (serverSupabase && (token_hash || code)) {
+    try {
+      if (token_hash) {
+        const { error } = await serverSupabase.auth.verifyOtp({
+          token_hash,
+          type
+        });
+        if (error) {
+          const isExpired = error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid');
+          return res.redirect(`https://udmrhub.site/?error=${isExpired ? 'expired_link' : encodeURIComponent(error.message)}`);
+        }
+        return res.redirect('https://udmrhub.site/?verified=true');
+      } else if (code) {
+        const { error } = await serverSupabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          const isExpired = error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid');
+          return res.redirect(`https://udmrhub.site/?error=${isExpired ? 'expired_link' : encodeURIComponent(error.message)}`);
+        }
+        return res.redirect('https://udmrhub.site/?verified=true');
+      }
+    } catch (err: any) {
+      console.error('Server auth callback error:', err);
+      return res.redirect('https://udmrhub.site/?error=expired_link');
+    }
+  }
+
+  res.redirect('https://udmrhub.site/');
+};
+
+app.get('/auth/callback', handleAuthCallback);
+app.get('/api/auth/callback', handleAuthCallback);
 
 // Research Archives: Search & Filter with TF-IDF Relevance Scoring
 app.get('/api/research', (req: Request, res: Response) => {

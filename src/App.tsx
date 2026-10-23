@@ -121,6 +121,42 @@ export default function App() {
     // Live Supabase Auth state listener
     let unsubscribeAuth = () => {};
     if (isSupabaseConfigured) {
+      // Check URL parameters for confirmation redirect from /auth/callback
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const isVerified = urlParams.get('verified') === 'true' || hashParams.get('type') === 'signup';
+        const authError = urlParams.get('error') || hashParams.get('error_description') || hashParams.get('error');
+        const tokenHash = urlParams.get('token_hash') || hashParams.get('token_hash');
+        const tokenType = (urlParams.get('type') || hashParams.get('type') || 'signup') as any;
+
+        if (tokenHash) {
+          // Direct token_hash verification fallback
+          supabase.auth.verifyOtp({ token_hash: tokenHash, type: tokenType }).then(({ error }) => {
+            if (error) {
+              const isExpired = error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid');
+              triggerToast(isExpired ? 'This verification link has expired (strictly 5-minute validity). Please request a new verification email in the portal.' : error.message, 'error');
+            } else {
+              triggerToast('Email successfully verified! You may now sign in with your UDM credentials.', 'success');
+            }
+            setShowAuthModal(true);
+            window.history.replaceState({}, document.title, '/');
+          });
+        } else if (isVerified) {
+          triggerToast('Email successfully verified! You may now sign in with your UDM credentials.', 'success');
+          setShowAuthModal(true);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (authError) {
+          if (authError.toLowerCase().includes('expired') || authError === 'expired_link') {
+            triggerToast('This verification link has expired (strictly 5-minute validity). Please request a new verification email in the portal.', 'error');
+          } else {
+            triggerToast(`Verification notice: ${authError}`, 'error');
+          }
+          setShowAuthModal(true);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch {}
+
       const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
@@ -131,6 +167,17 @@ export default function App() {
         }
 
         if (session?.user) {
+          // Strictly prevent unconfirmed accounts from receiving an active session
+          const isConfirmed = Boolean(session.user.email_confirmed_at || session.user.confirmed_at);
+          if (!isConfirmed) {
+            await supabase.auth.signOut();
+            setCurrentUser(null);
+            try {
+              localStorage.removeItem('udm_active_user');
+            } catch {}
+            return;
+          }
+
           try {
             let profile: any = null;
             try {

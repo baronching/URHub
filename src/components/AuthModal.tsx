@@ -25,7 +25,9 @@ import {
   ArrowLeft,
   RefreshCw,
   Send,
-  AlertTriangle
+  AlertTriangle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -71,6 +73,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
   const [idNumber, setIdNumber] = useState('');
   const [courseProgram, setCourseProgram] = useState('');
   const [yearLevel, setYearLevel] = useState<string>('1st Year');
+
+  // Password Visibility Toggle State
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // Verification & Forgot Password State
   const [otpCode, setOtpCode] = useState('');
@@ -345,16 +352,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                   setErrorMsg('');
                   setSuccessMsg('');
                 }}
-                className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2 rounded-lg transition-all text-center cursor-pointer ${
                   viewMode === 'register'
                     ? 'bg-white text-[#1a4731] shadow-xs border border-slate-200 font-extrabold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <span>Register UDM Account</span>
-                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold">
-                  Unavailable
-                </span>
+                Register UDM Account
               </button>
             </div>
           )}
@@ -376,56 +380,212 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
           )}
 
           {/* ========================================================= */}
-          {/* VIEW 1: REGISTRATION DISABLED NOTICE */}
+          {/* VIEW 1: REGISTRATION FORM */}
           {/* ========================================================= */}
           {viewMode === 'register' && (
-            <div className="space-y-5 animate-in fade-in duration-200 py-2">
-              {/* Technical Issue Maintenance Notice */}
-              <div className="p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3.5 shadow-xs">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2.5 rounded-xl bg-amber-200/90 text-amber-900 shrink-0">
-                    <AlertTriangle className="w-6 h-6 text-amber-800" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black uppercase tracking-wider text-amber-900">
-                      Registration Temporarily Unavailable
-                    </h3>
-                    <p className="text-xs text-amber-800 font-medium">
-                      Universidad de Manila Single Sign-On Portal
-                    </p>
-                  </div>
-                </div>
+            <form onSubmit={handleSubmit} className="space-y-3.5 animate-in fade-in duration-200">
+              {/* Full Name */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                  <UserCheck className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>Full Name *</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  placeholder="Juan Dela Cruz"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
+                />
+              </div>
 
-                <p className="text-xs text-amber-950/90 leading-relaxed font-medium">
-                  Due to technical issues and ongoing university database synchronization, online self-registration of new accounts is currently unavailable.
-                </p>
+              {/* Email Address */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                  <Mail className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>UDM Institutional Email * (@udm.edu.ph)</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="yourname@udm.edu.ph"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
+                />
+              </div>
 
-                <div className="p-3.5 rounded-xl bg-white/90 border border-amber-200 text-xs text-amber-900 space-y-1.5">
-                  <p className="font-bold text-amber-950 flex items-center gap-1.5">
-                    <span>Notice on Institutional Accounts:</span>
-                  </p>
-                  <p className="leading-relaxed">
-                    Official accounts for <strong>Students</strong>, <strong>Faculty</strong>, and <strong>URELIA Staff</strong> are provisioned manually by the university administrator. Please use the credentials issued to you to sign in.
-                  </p>
-                </div>
-
-                <div className="text-[11px] text-amber-850 font-medium pt-1">
-                  If you do not have your login details yet, please coordinate with the <strong>URELIA Office</strong> or your College Department.
+              {/* Password with Eye Visibility Toggle */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                  <Lock className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>Password * (Min. 8 characters)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 pr-10 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4 text-slate-600" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
                 </div>
               </div>
 
+              {/* Confirm Password with Eye Visibility Toggle */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                  <Lock className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>Confirm Password *</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 pr-10 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer"
+                    title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4 text-slate-600" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Role & College Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                    <GraduationCap className="w-3.5 h-3.5 text-[#1a4731]" />
+                    <span>Role *</span>
+                  </label>
+                  <select
+                    value={userType}
+                    onChange={e => setUserType(e.target.value as 'Student' | 'Faculty_Admin')}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
+                  >
+                    <option value="Student">Student</option>
+                    <option value="Faculty_Admin">Faculty/Admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                    <Briefcase className="w-3.5 h-3.5 text-[#1a4731]" />
+                    <span>UDM Unit *</span>
+                  </label>
+                  <select
+                    value={college}
+                    onChange={e => setCollege(e.target.value as UDMCollege)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
+                  >
+                    {UDM_COLLEGES.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.id} - {c.name.replace('College of ', '')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Student/Faculty ID Number */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                  <IdCard className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>Student / Faculty ID Number *</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={idNumber}
+                  onChange={e => setIdNumber(e.target.value)}
+                  placeholder={userType === 'Student' ? '2023-10452' : 'FAC-2021-08'}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Course/Program & Year Level */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                    <BookOpen className="w-3.5 h-3.5 text-[#1a4731]" />
+                    <span>Course / Program *</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={courseProgram}
+                    onChange={e => setCourseProgram(e.target.value)}
+                    placeholder="BS Information Technology"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                  />
+                </div>
+
+                {/* Year Level (Only for Students) */}
+                {userType === 'Student' && (
+                  <div className="animate-in fade-in duration-200">
+                    <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                      <GraduationCap className="w-3.5 h-3.5 text-[#1a4731]" />
+                      <span>Year Level *</span>
+                    </label>
+                    <select
+                      value={yearLevel}
+                      onChange={e => setYearLevel(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
+                    >
+                      <option value="1st Year">1st Year</option>
+                      <option value="2nd Year">2nd Year</option>
+                      <option value="3rd Year">3rd Year</option>
+                      <option value="4th Year">4th Year</option>
+                      <option value="5th Year">5th Year</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Expiry and Institutional Notice */}
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 space-y-1">
+                <p className="font-bold flex items-center gap-1">
+                  <span>Notice:</span>
+                  <span className="font-normal">Verification emails expire strictly after <strong>5 minutes</strong>. Accounts remain locked until email confirmation is completed.</span>
+                </p>
+              </div>
+
+              {/* Submit Button */}
               <button
-                type="button"
-                onClick={() => {
-                  setViewMode('signin');
-                  setErrorMsg('');
-                  setSuccessMsg('');
-                }}
-                className="w-full py-3 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md transition-all cursor-pointer text-center"
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 rounded-xl text-xs font-extrabold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md transition-all disabled:opacity-50 flex items-center justify-center space-x-2 border border-[#c9a84c]/30 cursor-pointer active:scale-[0.99]"
               >
-                Proceed to Sign In
+                <span>
+                  {isLoading ? 'Creating Account & Dispatching Code...' : 'Register UDM Account'}
+                </span>
               </button>
-            </div>
+            </form>
           )}
 
           {/* ========================================================= */}
@@ -470,14 +630,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     Forgot password?
                   </button>
                 </div>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 pr-10 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4 text-slate-600" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Submit Button */}
@@ -543,7 +717,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
                   {/* Helper Tip */}
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mt-2 text-[11px] text-emerald-900 text-center font-medium">
-                    A 6-digit verification code was sent to your UDM inbox via Hostinger SMTP. Enter it above to activate your account.
+                    A 6-digit verification code and activation link were sent to your UDM inbox via Custom Gmail SMTP. Both expire strictly in <strong>5 minutes</strong>.
                   </div>
                 </div>
 
@@ -664,28 +838,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                       New Password (Min. 8 characters)
                     </label>
-                    <input
-                      type="password"
-                      required
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        required
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 pr-10 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer"
+                        title={showNewPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="w-4 h-4 text-slate-600" />
+                        ) : (
+                          <Eye className="w-4 h-4 text-slate-400" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Confirm New Password
                     </label>
-                    <input
-                      type="password"
-                      required
-                      value={confirmNewPassword}
-                      onChange={e => setConfirmNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        value={confirmNewPassword}
+                        onChange={e => setConfirmNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 pr-10 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer"
+                        title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="w-4 h-4 text-slate-600" />
+                        ) : (
+                          <Eye className="w-4 h-4 text-slate-400" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <button
