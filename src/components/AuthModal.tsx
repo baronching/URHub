@@ -571,7 +571,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
               <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 space-y-1">
                 <p className="font-bold flex items-center gap-1">
                   <span>Notice:</span>
-                  <span className="font-normal">Verification emails expire strictly after <strong>5 minutes</strong>. Accounts remain locked until email confirmation is completed.</span>
+                  <span className="font-normal">Verification codes remain active for 24 hours. Accounts require institutional email confirmation before login.</span>
                 </p>
               </div>
 
@@ -715,9 +715,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     className="w-full max-w-[240px] mx-auto block bg-slate-50 border-2 border-slate-300 focus:border-[#1a4731] rounded-xl py-3 text-center text-2xl font-mono tracking-[0.5em] font-extrabold text-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#1a4731]/15 transition-all"
                   />
 
-                  {/* Helper Tip */}
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 mt-2 text-[11px] text-emerald-900 text-center font-medium">
-                    A 6-digit verification code and activation link were sent to your UDM inbox via Custom Gmail SMTP. Both expire strictly in <strong>5 minutes</strong>.
+                  {/* Institutional Outlook / M365 Tip */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3 text-left space-y-1 text-amber-950">
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span>Important for @udm.edu.ph Outlook Users:</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-amber-900">
+                      Microsoft 365 routes new automated emails from <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px] font-mono">blching@udmrhub.site</code> directly to your <strong>Junk Email</strong> folder.
+                    </p>
+                    <ul className="list-disc list-inside text-[11px] text-amber-800 space-y-0.5 pt-0.5">
+                      <li>Check your Outlook <strong>Junk Email</strong> or <strong>Other</strong> tab.</li>
+                      <li>Click <strong>"Not Junk"</strong> so future research notices reach your inbox.</li>
+                      <li>Verification codes remain active for <strong>24 hours</strong>.</li>
+                    </ul>
                   </div>
                 </div>
 

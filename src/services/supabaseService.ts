@@ -683,7 +683,7 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
   return {
     user: newUser,
     needsVerification,
-    message: `A verification link and 6-digit confirmation code have been sent to ${normalizedEmail}. Please check your inbox within 5 minutes to activate your account.`
+    message: `A 6-digit confirmation code has been dispatched to ${normalizedEmail}. Please check your inbox or Junk Email folder to activate your account.`
   };
 }
 
