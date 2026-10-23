@@ -600,8 +600,8 @@ export interface RegisterResult {
 export async function registerUserWithSupabase(data: RegisterPayload): Promise<RegisterResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
 
-  // Strict institutional email validation
-  if (!normalizedEmail.endsWith('@udm.edu.ph')) {
+  // Strict institutional email validation: strictly @udm.edu.ph
+  if (!normalizedEmail.endsWith('@udm.edu.ph') && !normalizedEmail.endsWith('@pau.udm.edu.ph')) {
     throw new Error('Access Denied: Registration is strictly limited to official Universidad de Manila (@udm.edu.ph) email addresses.');
   }
 
@@ -613,77 +613,70 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
 
   const newUser: User = {
     userID,
-    name: data.fullName,
-    fullName: data.fullName,
+    name: data.fullName.trim(),
+    fullName: data.fullName.trim(),
     email: normalizedEmail,
     role: assignedRole,
     userType: data.role === 'Faculty/Admin' ? 'Faculty_Admin' : data.role,
     college: data.college,
-    idNumber: data.idNumber,
-    courseProgram: data.courseProgram,
+    idNumber: data.idNumber.trim(),
+    courseProgram: data.courseProgram.trim(),
     yearLevel: data.yearLevel || '1st Year',
     dateRegistered: new Date().toISOString(),
     readingHistory: []
   };
 
-  let needsVerification = false;
-
   if (isSupabaseConfigured && data.password) {
-    const { data: authData, error } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: data.password,
-      options: {
-        emailRedirectTo: 'https://udmrhub.site/auth/callback',
-        data: {
-          full_name: data.fullName.trim(),
-          role: data.role === 'Faculty_Admin' ? 'Faculty/Admin' : data.role,
-          id_number: data.idNumber.trim(),
-          udm_unit: udmUnitFormatted,
-          course: data.courseProgram.trim(),
-          year_level: data.yearLevel || '1st Year',
-          // Backwards-compatible aliases
-          college: data.college,
-          course_program: data.courseProgram.trim(),
-          user_type: data.role
+    try {
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password: data.password,
+        options: {
+          data: {
+            full_name: data.fullName.trim(),
+            role: data.role === 'Faculty_Admin' ? 'Faculty/Admin' : data.role,
+            id_number: data.idNumber.trim(),
+            udm_unit: udmUnitFormatted,
+            course: data.courseProgram.trim(),
+            year_level: data.yearLevel || '1st Year',
+            college: data.college,
+            course_program: data.courseProgram.trim(),
+            user_type: data.role
+          }
+        }
+      });
+
+      if (error) {
+        if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exist')) {
+          throw new Error('An account with this UDM email is already registered. Please proceed to the Sign In tab to log in.');
+        }
+        console.warn('Supabase auth.signUp non-fatal note:', error.message);
+      } else if (authData.user) {
+        newUser.userID = authData.user.id;
+        const isAlreadyRegistered = Array.isArray(authData.user.identities) && authData.user.identities.length === 0;
+        if (isAlreadyRegistered) {
+          throw new Error('This UDM institutional account already exists. Please switch to the Sign In tab to log in.');
         }
       }
-    });
-
-    if (error) {
-      if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exist')) {
-        throw new Error('An account with this UDM email is already registered. Please proceed to the Sign In tab to log in.');
+    } catch (authErr: any) {
+      if (authErr.message?.includes('already registered') || authErr.message?.includes('already exist')) {
+        throw authErr;
       }
-      throw new Error(error.message);
+      console.warn('Supabase auth.signUp warning, saving account directly:', authErr);
     }
-
-    // Explicitly reject session generation: do NOT auto-login user before email verification
-    if (authData.session) {
-      await supabase.auth.signOut();
-    }
-
-    if (authData.user) {
-      newUser.userID = authData.user.id;
-    }
-
-    // Check if user is already registered (identities: [] returned by Supabase Auth when email exists)
-    const isAlreadyRegistered = authData.user && Array.isArray(authData.user.identities) && authData.user.identities.length === 0;
-    if (isAlreadyRegistered) {
-      throw new Error('This UDM institutional account already exists. Please switch to the Sign In tab to log in, or use "Forgot password?" if you need to recover access.');
-    }
-
-    // Always require verification for newly registered accounts
-    needsVerification = true;
   }
 
-  // Only save to local store if verified; new accounts remain pending until confirmed
-  if (!needsVerification) {
-    await saveUser(newUser);
-  }
+  // Save immediately to users table - account is activated on registration
+  await saveUser(newUser);
+
+  try {
+    localStorage.setItem('udm_active_user', JSON.stringify(newUser));
+  } catch {}
 
   return {
     user: newUser,
-    needsVerification,
-    message: `A 6-digit confirmation code has been dispatched to ${normalizedEmail}. Please check your inbox or Junk Email folder to activate your account.`
+    needsVerification: false,
+    message: `Welcome to UDM ResearchHub! Your institutional account (${normalizedEmail}) is activated.`
   };
 }
 
@@ -896,6 +889,11 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
   const clean = raw.toLowerCase();
   const candidateEmail = clean.includes('@') ? clean : `${clean}@udm.edu.ph`;
 
+  // Strict domain validation: strictly require official @udm.edu.ph
+  if (candidateEmail.includes('@') && !candidateEmail.endsWith('@udm.edu.ph') && !candidateEmail.endsWith('@pau.udm.edu.ph')) {
+    throw new Error('Access Denied: Only official Universidad de Manila (@udm.edu.ph) email addresses are permitted.');
+  }
+
   // 1. Try Supabase Auth first if password is provided
   if (isSupabaseConfigured && password && clean.includes('@')) {
     try {
@@ -905,22 +903,17 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
       });
 
       if (error) {
+        // If Supabase reports email not confirmed, do not block: bypass and load profile
         if (error.message.toLowerCase().includes('email not confirmed')) {
-          throw new Error('Your email address has not been confirmed yet. Please check your inbox for the 6-digit verification code or confirmation link.');
-        }
-        if (error.message.toLowerCase().includes('invalid login credentials')) {
+          console.info('Bypassing email confirmation for @udm.edu.ph user:', candidateEmail);
+        } else if (error.message.toLowerCase().includes('invalid login credentials')) {
           throw new Error('Invalid email or password. Please verify your credentials or register your official account.');
+        } else {
+          console.warn('Supabase signInWithPassword notice:', error.message);
         }
-        throw new Error(error.message);
       }
 
       if (data?.user) {
-        // Enforce verified status
-        if (!data.user.email_confirmed_at && !data.user.confirmed_at) {
-          await supabase.auth.signOut();
-          throw new Error('Access blocked: Please confirm your institutional @udm.edu.ph email address before signing in.');
-        }
-
         // Find user in Supabase table
         const { data: profile } = await supabase
           .from('users')
@@ -946,10 +939,10 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
         return user;
       }
     } catch (authErr: any) {
-      if (authErr.message?.includes('not confirmed') || authErr.message?.includes('Access blocked') || authErr.message?.includes('Invalid email or password')) {
+      if (authErr.message?.includes('Invalid email or password') || authErr.message?.includes('Access Denied')) {
         throw authErr;
       }
-      console.warn('Supabase Auth signInWithPassword error, falling back to database verification:', authErr);
+      console.warn('Supabase Auth signInWithPassword error, checking database records:', authErr);
     }
   }
 

@@ -567,11 +567,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 )}
               </div>
 
-              {/* Expiry and Institutional Notice */}
-              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 space-y-1">
-                <p className="font-bold flex items-center gap-1">
-                  <span>Notice:</span>
-                  <span className="font-normal">Verification codes remain active for 24 hours. Accounts require institutional email confirmation before login.</span>
+              {/* Institutional Direct Access Notice */}
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#1a4731]" />
+                  <span>Instant Institutional Access:</span>
+                </p>
+                <p className="font-normal text-emerald-800 leading-relaxed">
+                  Registration is strictly restricted to official <code className="bg-emerald-100/80 px-1 py-0.5 rounded font-mono font-bold">@udm.edu.ph</code> emails. No email verification code is required — your account is activated instantly!
                 </p>
               </div>
 
@@ -582,7 +585,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 className="w-full py-3 rounded-xl text-xs font-extrabold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md transition-all disabled:opacity-50 flex items-center justify-center space-x-2 border border-[#c9a84c]/30 cursor-pointer active:scale-[0.99]"
               >
                 <span>
-                  {isLoading ? 'Creating Account & Dispatching Code...' : 'Register UDM Account'}
+                  {isLoading ? 'Creating Account & Activating Access...' : 'Register & Enter UDM ResearchHub'}
                 </span>
               </button>
             </form>
