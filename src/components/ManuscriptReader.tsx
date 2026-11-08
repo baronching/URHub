@@ -28,17 +28,34 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
 
-  // Generate authentic institutional PDF document or use submitted fullPdfUrl
+  // Normalize Google Drive or external PDF URLs for seamless iframe embedding
+  const submittedEmbedUrl = useMemo(() => {
+    if (!research.fullPdfUrl || research.fullPdfUrl.startsWith('/uploads/mock')) return '';
+    let url = research.fullPdfUrl.trim();
+    if (url.includes('drive.google.com/file/d/')) {
+      const match = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        return `https://drive.google.com/file/d/${match[1]}/preview`;
+      }
+      return url.replace(/\/view(\?.*)?$/, '/preview');
+    }
+    return url;
+  }, [research.fullPdfUrl]);
+
+  const hasSubmittedUrl = Boolean(submittedEmbedUrl);
+
+  const [activeView, setActiveView] = useState<'submitted' | 'institutional'>(
+    hasSubmittedUrl ? 'submitted' : 'institutional'
+  );
+
+  useEffect(() => {
+    setActiveView(hasSubmittedUrl ? 'submitted' : 'institutional');
+  }, [research.researchID, hasSubmittedUrl]);
+
+  // Generate authentic institutional PDF document
   useEffect(() => {
     let active = true;
     setIsGenerating(true);
-
-    // If research already has an external or uploaded PDF URL, use it
-    if (research.fullPdfUrl && !research.fullPdfUrl.startsWith('/uploads/mock')) {
-      setPdfBlobUrl(research.fullPdfUrl);
-      setIsGenerating(false);
-      return;
-    }
 
     try {
       const doc = new jsPDF({
@@ -379,6 +396,9 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
     };
   }, [research.researchID, research.fullPdfUrl]);
 
+  const currentActiveUrl = activeView === 'submitted' && hasSubmittedUrl ? submittedEmbedUrl : pdfBlobUrl;
+  const isGoogleDriveEmbed = activeView === 'submitted' && submittedEmbedUrl.includes('drive.google.com');
+
   return (
     <div className="space-y-3">
       {/* Top Embedded PDF Toolbar */}
@@ -389,25 +409,55 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
           </span>
           <div>
             <h4 className="font-bold text-[#1a4731] text-xs sm:text-sm flex items-center space-x-1.5">
-              <span>Submitted Manuscript PDF</span>
+              <span>Full Manuscript PDF Reader</span>
               <span className="px-2 py-0.5 rounded-full text-[9px] bg-emerald-100 text-emerald-800 font-extrabold uppercase">
-                Embedded Full PDF
+                {activeView === 'submitted' ? 'Published Journal PDF' : 'Institutional Archive PDF'}
               </span>
             </h4>
             <p className="text-slate-600 text-[11px]">
-              {research.documentNumber || research.researchID} • Official submitted paper with institutional archival clearance
+              {research.documentNumber || research.researchID} • Official published research accessible to UDM students & faculty
             </p>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center space-x-2">
-          {pdfBlobUrl && (
+        {/* Action Controls & Format Switcher */}
+        <div className="flex flex-wrap items-center gap-2">
+          {hasSubmittedUrl && (
+            <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-300 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setActiveView('submitted')}
+                className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'submitted'
+                    ? 'bg-[#1a4731] text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="View original submitted journal publication"
+              >
+                Journal PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('institutional')}
+                className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'institutional'
+                    ? 'bg-[#1a4731] text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="View verified multi-page UDM Institutional Archive edition"
+              >
+                Institutional PDF
+              </button>
+            </div>
+          )}
+
+          {currentActiveUrl && (
             <a
-              href={pdfBlobUrl}
+              href={currentActiveUrl}
               target="_blank"
               rel="noreferrer"
               className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs flex items-center space-x-1 transition-all cursor-pointer"
+              title="Open full PDF document in a new tab"
             >
               <ExternalLink className="w-3.5 h-3.5 text-[#1a4731]" />
               <span className="hidden sm:inline">Open in New Tab</span>
@@ -417,6 +467,7 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
           <button
             onClick={onDownloadAbstract}
             className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+            title="Download Abstract as PDF document"
           >
             <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
             <span>Download Abstract</span>
@@ -425,11 +476,20 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
       </div>
 
       {/* Embedded PDF Viewer Frame */}
-      {isGenerating ? (
+      {activeView === 'submitted' && hasSubmittedUrl ? (
+        <div className="w-full h-[74vh] sm:h-[76vh] rounded-xl overflow-hidden border border-slate-300 shadow-inner bg-slate-900/10">
+          <iframe
+            src={isGoogleDriveEmbed ? submittedEmbedUrl : `${submittedEmbedUrl}#toolbar=1&navpanes=1&scrollbar=1`}
+            className="w-full h-full border-0 rounded-xl"
+            title={`${research.title} - Full Submitted Journal PDF`}
+            allow="autoplay; encrypted-media; fullscreen"
+          />
+        </div>
+      ) : isGenerating ? (
         <div className="w-full h-[72vh] rounded-xl border border-slate-200 bg-white flex flex-col items-center justify-center space-y-3 p-8 text-center">
           <RefreshCw className="w-8 h-8 text-[#1a4731] animate-spin" />
           <p className="text-sm font-bold text-[#1a4731]">
-            Loading submitted manuscript PDF...
+            Loading institutional manuscript PDF...
           </p>
           <p className="text-xs text-slate-500 max-w-sm">
             Embedding official paper "{research.title}" with institutional headers and archival registry numbers.
@@ -440,7 +500,7 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
           <iframe
             src={`${pdfBlobUrl}#toolbar=1&navpanes=1&scrollbar=1`}
             className="w-full h-full border-0 rounded-xl"
-            title={`${research.title} - Submitted Manuscript PDF`}
+            title={`${research.title} - Institutional Archival PDF`}
           />
         </div>
       ) : (

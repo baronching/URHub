@@ -1,10 +1,10 @@
 import React from 'react';
 import { Research, UDM_COLLEGES } from '../types';
-import { Eye, Download, FileText, Calendar, GraduationCap, ArrowUpRight } from 'lucide-react';
+import { Eye, Download, FileText, Calendar, GraduationCap, ArrowUpRight, BookOpen } from 'lucide-react';
 
 interface ResearchCardProps {
   research: Research;
-  onSelect: (research: Research) => void;
+  onSelect: (research: Research, initialTab?: 'abstract' | 'full_paper') => void;
   onDownloadAbstract: (research: Research, e: React.MouseEvent) => void;
   isSelected?: boolean;
   onToggleSelect?: (research: Research, e: React.MouseEvent) => void;
@@ -134,20 +134,40 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
       </div>
 
       {/* Footer Action Buttons */}
-      <div className="pt-3 sm:pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+      <div className="pt-3 sm:pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(research, 'full_paper');
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+            title="Read full submitted manuscript PDF"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-[#c9a84c]" />
+            <span>Read PDF</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => onDownloadAbstract(research, e)}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-[#1a4731] border border-slate-200 flex items-center space-x-1 transition-all cursor-pointer"
+            title="Download Abstract as PDF"
+          >
+            <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
+            <span className="hidden sm:inline">Abstract</span>
+          </button>
+        </div>
+
         <button
           type="button"
-          onClick={(e) => onDownloadAbstract(research, e)}
-          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-50 hover:bg-slate-100 text-[#1a4731] border border-slate-200 flex items-center space-x-1.5 transition-all cursor-pointer"
+          onClick={() => onSelect(research, 'abstract')}
+          className="text-xs font-bold text-[#1a4731] flex items-center space-x-1 group-hover:text-[#c9a84c] transition-colors select-none cursor-pointer"
         >
-          <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
-          <span>Download Abstract</span>
-        </button>
-
-        <span className="text-xs font-bold text-[#1a4731] flex items-center space-x-1 group-hover:text-[#c9a84c] transition-colors select-none">
-          <span>View Details</span>
+          <span>Details</span>
           <ArrowUpRight className="w-3.5 h-3.5" />
-        </span>
+        </button>
       </div>
     </div>
   );

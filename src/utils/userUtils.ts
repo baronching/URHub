@@ -71,8 +71,17 @@ export function canViewUnpublished(user?: User | null): boolean {
   return true;
 }
 
-// Students CANNOT view full papers or download full manuscripts; Program Chairs, Deans, and URELIA can
-export function canViewFullPaper(user?: User | null): boolean {
+// Full PDF viewer access:
+// All students, faculty, and administrators have full PDF viewer access to any PUBLISHED research paper.
+// Unpublished manuscripts (pending review or rejected) are restricted to Program Chairs, Deans, and URELIA.
+export function canViewFullPaper(user?: User | null, paper?: any | null): boolean {
+  if (paper) {
+    const isPublished =
+      paper.status === 'approved' ||
+      paper.publicationType === 'published' ||
+      (!paper.status && paper.status !== 'pending' && paper.status !== 'rejected');
+    if (isPublished) return true;
+  }
   if (!user || isStudent(user)) return false;
   return isProgramChair(user) || isDean(user) || isUrelia(user);
 }

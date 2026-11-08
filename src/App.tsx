@@ -69,6 +69,7 @@ export default function App() {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
 
   const [selectedResearch, setSelectedResearch] = useState<Research | null>(null);
+  const [detailModalInitialTab, setDetailModalInitialTab] = useState<'abstract' | 'full_paper'>('abstract');
   const [selectedResearchIds, setSelectedResearchIds] = useState<string[]>([]);
   const [isDownloadingBatch, setIsDownloadingBatch] = useState<boolean>(false);
   const selectAllCheckboxRef = React.useRef<HTMLInputElement>(null);
@@ -507,8 +508,9 @@ export default function App() {
   }, [rawResearchList, submissionsList]);
 
   // Handle Paper Selection -> Increment View
-  const handleSelectResearch = async (paper: Research) => {
+  const handleSelectResearch = async (paper: Research, initialTab?: 'abstract' | 'full_paper') => {
     setSelectedResearch(paper);
+    setDetailModalInitialTab(initialTab || 'abstract');
     recordResearchView(paper.researchID);
     if (currentUser) {
       recordUserReadingHistory(currentUser.userID, paper.researchID);
@@ -1178,6 +1180,7 @@ export default function App() {
       {/* Modals */}
       <ResearchDetailModal
         research={selectedResearch}
+        initialTab={detailModalInitialTab}
         allResearch={rawResearchList}
         currentUser={currentUser}
         accessRequests={accessRequestsList}

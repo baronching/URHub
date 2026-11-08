@@ -7,7 +7,7 @@ interface RecommendationSectionProps {
   recommendations: (Recommendation & { paper?: Research })[];
   targetCollege?: UDMCollege;
   onTargetCollegeChange?: (college: UDMCollege) => void;
-  onSelectResearch: (research: Research) => void;
+  onSelectResearch: (research: Research, initialTab?: 'abstract' | 'full_paper') => void;
   onOpenAuth: () => void;
 }
 
@@ -160,13 +160,24 @@ export const RecommendationSection: React.FC<RecommendationSectionProps> = ({
                   </div>
                 </div>
 
-                {/* Footer Link */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#1a4731] group-hover:underline">
-                  <span className="flex items-center space-x-1">
+                {/* Footer Actions */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#1a4731]">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectResearch(paper, 'full_paper');
+                    }}
+                    className="px-2.5 py-1 rounded bg-[#1a4731] hover:bg-[#123323] text-white flex items-center space-x-1 transition-all cursor-pointer shadow-2xs"
+                  >
                     <BookOpen className="w-3.5 h-3.5 text-[#c9a84c]" />
-                    <span>View Recommended Paper</span>
+                    <span>Read Full PDF</span>
+                  </button>
+
+                  <span className="flex items-center space-x-1 group-hover:underline cursor-pointer">
+                    <span>Details</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-[#c9a84c]" />
                   </span>
-                  <ArrowUpRight className="w-4 h-4 text-[#c9a84c]" />
                 </div>
               </div>
             );

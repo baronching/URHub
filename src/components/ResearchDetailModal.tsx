@@ -36,9 +36,10 @@ interface ResearchDetailModalProps {
   currentUser: User | null;
   accessRequests: AccessRequest[];
   onClose: () => void;
-  onSelectResearch: (research: Research) => void;
+  onSelectResearch: (research: Research, initialTab?: 'abstract' | 'full_paper') => void;
   onRequestAccess: (research: Research) => Promise<void>;
   onOpenAuthModal?: () => void;
+  initialTab?: 'abstract' | 'full_paper' | 'related_studies';
 }
 
 export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
@@ -49,10 +50,18 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   onClose,
   onSelectResearch,
   onRequestAccess,
-  onOpenAuthModal
+  onOpenAuthModal,
+  initialTab
 }) => {
-  const [activeTab, setActiveTab] = useState<'abstract' | 'full_paper' | 'related_studies'>('abstract');
+  const [activeTab, setActiveTab] = useState<'abstract' | 'full_paper' | 'related_studies'>(initialTab || 'abstract');
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
+
+  // Synchronize active tab with initialTab prop when paper opens
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, research?.researchID]);
 
   // Background Academic Breakdown State
   const [academicSummary, setAcademicSummary] = useState<any | null>(null);
@@ -200,7 +209,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
 
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
   const isPublishedPaper = research.status === 'approved' || research.publicationType === 'published' || (!research.status && research.status !== 'pending' && research.status !== 'rejected');
-  const canAccessFullPaper = isPublishedPaper || canViewFullPaper(currentUser);
+  const canAccessFullPaper = isPublishedPaper || canViewFullPaper(currentUser, research);
 
   // Download Abstract as PDF using jsPDF
   const handleDownloadAbstractPdf = () => {
@@ -422,7 +431,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
               <span className="truncate">Full Paper (PDF)</span>
               {canAccessFullPaper ? (
                 <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">
-                  {isPublishedPaper ? 'Submitted PDF' : 'Authorized'}
+                  {isPublishedPaper ? 'Full PDF' : 'Authorized'}
                 </span>
               ) : (
                 <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-bold shrink-0">
@@ -507,19 +516,32 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                       Official Research Abstract & Catalog Record
                     </p>
                     <p className="text-emerald-700 text-[11px] truncate">
-                      {canViewFullPaper(currentUser)
+                      {isPublishedPaper
+                        ? `Published research document • Full submitted PDF is accessible to students and faculty in the Full Paper (PDF) tab.`
+                        : canViewFullPaper(currentUser, research)
                         ? `Signed in as ${currentUser?.name} • Full manuscript available in Full Paper tab.`
                         : `Authorized for student and public review. Use the button to download the official Abstract PDF.`}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={handleDownloadAbstractPdf}
-                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs inline-flex items-center justify-center space-x-1.5 shrink-0 transition-all cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
-                  <span>Download Abstract (PDF)</span>
-                </button>
+                <div className="flex items-center space-x-2 shrink-0">
+                  {isPublishedPaper && (
+                    <button
+                      onClick={() => setActiveTab('full_paper')}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs inline-flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-[#c9a84c]" />
+                      <span>View Full PDF</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={handleDownloadAbstractPdf}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-100 text-[#1a4731] border border-slate-300 shadow-xs inline-flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
+                    <span>Download Abstract</span>
+                  </button>
+                </div>
               </div>
 
               {/* Main Title - Responsive scaling */}
@@ -605,16 +627,36 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Institutional Rights Constraint Notice */}
-              <div className="p-3.5 sm:p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-2.5 sm:space-x-3 text-xs text-amber-900">
-                <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold mb-0.5 text-xs sm:text-sm">UDM Institutional Archival Governance</p>
-                  <p className="text-amber-800 leading-normal text-[11px] sm:text-xs">
-                    In compliance with Universidad de Manila URELIA Office policies and Republic Act 10173: Only official abstracts are downloadable. Full research manuscripts are restricted to Program Chairs, College Deans, and the URELIA Office.
-                  </p>
+              {/* Institutional Rights Governance Notice */}
+              {isPublishedPaper ? (
+                <div className="p-3.5 sm:p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start space-x-2.5 sm:space-x-3 text-xs text-emerald-950">
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold mb-0.5 text-xs sm:text-sm">UDM Published Research Clearance</p>
+                    <p className="text-emerald-800 leading-normal text-[11px] sm:text-xs">
+                      This research paper is published and accessible to all Universidad de Manila students, faculty, and administration. You can view the full submitted manuscript directly in the{' '}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('full_paper')}
+                        className="font-bold underline text-[#1a4731] hover:text-emerald-900 cursor-pointer"
+                      >
+                        Full Paper (PDF)
+                      </button>{' '}
+                      tab.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-3.5 sm:p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-2.5 sm:space-x-3 text-xs text-amber-900">
+                  <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold mb-0.5 text-xs sm:text-sm">UDM Institutional Archival Governance</p>
+                    <p className="text-amber-800 leading-normal text-[11px] sm:text-xs">
+                      This manuscript is currently pending administrative evaluation and is restricted to Program Chairs, College Deans, and the URELIA Office. Once approved, the full PDF will be accessible to all students.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Similar Papers Section (ML Cosine Similarity) */}
               {similarPapers.length > 0 && (
