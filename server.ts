@@ -21,7 +21,7 @@ const PORT = Number(process.env.PORT) || 3000;
 // Initialize Supabase client on backend if configured
 const rawSupabaseUrl = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim();
 const supabaseServerUrl = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
-const supabaseServerKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
+const supabaseServerKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
 
 const isServerSupabaseConfigured = Boolean(
   supabaseServerUrl &&
@@ -30,8 +30,13 @@ const isServerSupabaseConfigured = Boolean(
   !supabaseServerUrl.includes('your-project-ref')
 );
 
+class DummyNodeWebSocket {}
+
 const serverSupabase = isServerSupabaseConfigured
-  ? createClient(supabaseServerUrl, supabaseServerKey)
+  ? createClient(supabaseServerUrl, supabaseServerKey, {
+      auth: { persistSession: false },
+      realtime: { transport: DummyNodeWebSocket as any }
+    })
   : null;
 
 // Initialize Google Gemini SDK with server-side API key and telemetry header
@@ -357,7 +362,7 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
 });
 
 // 2. Verify 6-Digit Numeric Registration OTP & Activate User
-app.post('/api/auth/verify-registration-otp', (req: Request, res: Response) => {
+app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response) => {
   const { email, otpCode } = req.body;
 
   if (!email || !otpCode) {
@@ -411,6 +416,28 @@ app.post('/api/auth/verify-registration-otp', (req: Request, res: Response) => {
 
   usersDB.push(newUser);
   pendingRegistrationOTPs.delete(cleanEmail);
+
+  // Sync to Supabase public.users table if configured
+  if (serverSupabase) {
+    try {
+      await serverSupabase.from('users').upsert({
+        id: newUser.userID,
+        name: newUser.name,
+        full_name: newUser.fullName,
+        email: newUser.email,
+        role: newUser.role,
+        user_type: newUser.userType,
+        college: newUser.college,
+        id_number: newUser.idNumber,
+        course_program: newUser.courseProgram,
+        reading_history: [],
+        created_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+      console.log(`[Supabase Sync] Successfully saved ${cleanEmail} to public.users table in UDMrhub`);
+    } catch (syncErr: any) {
+      console.warn('[Supabase Sync] Note on saving user to Supabase:', syncErr.message);
+    }
+  }
 
   const { password: _, ...safeUser } = newUser;
   res.status(200).json({
