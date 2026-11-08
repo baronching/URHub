@@ -1,6 +1,14 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Submission, User, UDM_COLLEGES } from '../types';
-import { isDean, isProgramChair, isUrelia, isUreliaDirector, isUreliaAdmin } from '../utils/userUtils';
+import {
+  isDean,
+  isProgramChair,
+  isUrelia,
+  isUreliaDirector,
+  isUreliaAdmin,
+  isUreliaPersonnel,
+  canApproveOrRejectSubmissions
+} from '../utils/userUtils';
 import {
   CheckSquare,
   CheckCircle2,
@@ -44,6 +52,8 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
   const isDeanUser = isDean(currentUser);
   const isChairUser = isProgramChair(currentUser);
   const isUreliaUser = isUrelia(currentUser);
+  const isPersonnelUser = isUreliaPersonnel(currentUser);
+  const canApproveReject = canApproveOrRejectSubmissions(currentUser);
 
   // Submissions filtered by role authority scope:
   // - Dean: strictly their designated college
@@ -468,6 +478,26 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                     </div>
                   )}
 
+                  {/* Dean Rejection / Revision Directives (Prominently visible to Program Chair) */}
+                  {sub.reviewNote && (sub.status === 'rejected' || sub.workflowStatus === 'revision_requested') && (
+                    <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-950 space-y-1">
+                      <div className="font-bold flex items-center space-x-1.5 text-rose-800">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>
+                          {sub.deanEndorsedBy ? `Dean's Evaluation Feedback (${sub.deanEndorsedBy})` : 'Dean / Reviewer Feedback & Rejection Reason'}:
+                        </span>
+                      </div>
+                      <p className="text-slate-800 bg-white/90 p-2.5 rounded-lg border border-rose-200 leading-relaxed font-medium">
+                        "{sub.reviewNote}"
+                      </p>
+                      {isChairUser && (
+                        <p className="text-[10px] text-rose-700 font-semibold pt-0.5">
+                          • Action for Program Chair: Review the Dean's feedback, update the manuscript, and re-submit as v1.1.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Publication Proof Preview (if published) */}
                   {sub.publicationProof?.externalUrl && (
                     <div className="p-2.5 bg-purple-50/70 border border-purple-200 rounded-xl text-xs text-purple-950 flex items-center gap-2">
@@ -652,6 +682,28 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
               </div>
             )}
 
+            {/* Dean's Feedback on Rejection / Revision */}
+            {selectedSubmission.reviewNote && (
+              <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl space-y-1.5">
+                <div className="flex items-center space-x-2 text-rose-800 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>
+                    {selectedSubmission.deanEndorsedBy
+                      ? `Dean's Official Evaluation Feedback (${selectedSubmission.deanEndorsedBy})`
+                      : 'Reviewer Feedback & Rejection Directives'}:
+                  </span>
+                </div>
+                <p className="text-xs text-slate-800 font-medium bg-white p-3 rounded-lg border border-rose-200 leading-relaxed">
+                  "{selectedSubmission.reviewNote}"
+                </p>
+                {isChairUser && (
+                  <p className="text-[10px] text-rose-700 font-semibold">
+                    • Program Chair Action: Close this window and click "Submit Research" in the top bar to re-submit the updated manuscript as v1.1.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Abstract */}
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-1">
@@ -718,8 +770,8 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                 </>
               )}
 
-              {/* URELIA Final Approval Actions */}
-              {isUreliaUser && selectedSubmission.status === 'pending' && (
+              {/* URELIA Final Approval Actions (Restricted to Director & Admin; Staff cannot approve/reject) */}
+              {isUreliaUser && canApproveReject && selectedSubmission.status === 'pending' && (
                 <>
                   <button
                     type="button"
@@ -763,6 +815,13 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                     </span>
                   </button>
                 </>
+              )}
+
+              {/* URELIA Personnel notice */}
+              {isPersonnelUser && selectedSubmission.status === 'pending' && (
+                <div className="text-[11px] text-slate-600 bg-slate-100 px-3.5 py-2 rounded-xl border border-slate-200 font-medium">
+                  • <strong>URELIA Staff Notice:</strong> Research Personnel submit papers directly to the Director. Final approval and rejection authority is exclusively reserved for the URELIA Director.
+                </div>
               )}
             </div>
 

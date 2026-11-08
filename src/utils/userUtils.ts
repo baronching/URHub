@@ -78,9 +78,17 @@ export function canViewFullPaper(user?: User | null): boolean {
 }
 
 // Final Archive & Publish approval is exclusively reserved for URELIA (Director / Admin)
-// Program Chairs and Deans CANNOT directly publish papers into the archive
+// Program Chairs, Deans, and URELIA Research Personnel CANNOT approve or reject papers into the archive
 export function canDirectPublish(user?: User | null): boolean {
   if (!user) return false;
+  if (user.role === 'urelia_personnel') return false;
+  return isUreliaDirector(user) || isUreliaAdmin(user);
+}
+
+// Approval and rejection authority check (URELIA Personnel cannot approve/reject because they submit papers too)
+export function canApproveOrRejectSubmissions(user?: User | null): boolean {
+  if (!user) return false;
+  if (user.role === 'urelia_personnel') return false;
   return isUreliaDirector(user) || isUreliaAdmin(user);
 }
 

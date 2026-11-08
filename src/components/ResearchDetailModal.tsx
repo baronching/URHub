@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Research, User, AccessRequest, UDM_COLLEGES } from '../types';
 import { canViewUnpublished, canViewFullPaper } from '../utils/userUtils';
 import { ManuscriptReader } from './ManuscriptReader';
@@ -199,9 +199,8 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   if (!research) return null;
 
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
-
-  // Access Permission: Signed-in UDM accounts can access full research manuscripts directly
-  const hasFullAccess = Boolean(currentUser);
+  const isPublishedPaper = research.status === 'approved' || research.publicationType === 'published' || (!research.status && research.status !== 'pending' && research.status !== 'rejected');
+  const canAccessFullPaper = isPublishedPaper || canViewFullPaper(currentUser);
 
   // Download Abstract as PDF using jsPDF
   const handleDownloadAbstractPdf = () => {
@@ -405,7 +404,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
             <button
               onClick={() => {
                 setActiveTab('full_paper');
-                if (!currentUser && onOpenAuthModal) {
+                if (!currentUser && !isPublishedPaper && onOpenAuthModal) {
                   onOpenAuthModal();
                 }
               }}
@@ -415,15 +414,15 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              {canViewFullPaper(currentUser) ? (
+              {canAccessFullPaper ? (
                 <BookOpen className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
               ) : (
                 <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               )}
-              <span className="truncate">Full Paper</span>
-              {canViewFullPaper(currentUser) ? (
+              <span className="truncate">Full Paper (PDF)</span>
+              {canAccessFullPaper ? (
                 <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">
-                  Authorized
+                  {isPublishedPaper ? 'Submitted PDF' : 'Authorized'}
                 </span>
               ) : (
                 <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-bold shrink-0">
@@ -648,27 +647,27 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
               )}
             </div>
           ) : activeTab === 'full_paper' ? (
-            /* FULL PAPER TAB: RESTRICTED TO CHAIRS, DEANS, URELIA */
-            canViewFullPaper(currentUser) ? (
+            /* FULL PAPER TAB: EMBEDDED SUBMITTED PDF FOR PUBLISHED PAPERS OR AUTHORIZED ROLES */
+            canAccessFullPaper ? (
               <ManuscriptReader
                 research={research}
                 onDownloadAbstract={handleDownloadAbstractPdf}
               />
             ) : (
-              /* RESTRICTED ACCESS NOTICE FOR STUDENTS / PUBLIC */
+              /* RESTRICTED ACCESS NOTICE FOR UNPUBLISHED PAPERS STILL PENDING REVIEW */
               <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-4 max-w-xl mx-auto shadow-xs">
                 <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-300">
                   <ShieldAlert className="w-7 h-7 text-amber-700" />
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-base sm:text-lg font-bold text-slate-900">
-                    Full Manuscript Access Restricted
+                    Unpublished Manuscript Access Restricted
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    Full Manuscript Access Restricted: Reserved for Program Chairs, College Deans, and the URELIA Office in compliance with Republic Act 10173 and institutional archival guidelines.
+                    This thesis/capstone manuscript is currently pending administrative evaluation and is restricted to Program Chairs, College Deans, and the URELIA Office. Once approved and published, the submitted PDF becomes viewable in full.
                   </p>
                   <p className="text-xs text-slate-500">
-                    Students and public researchers may review and download official study abstracts.
+                    You may review and download the official study abstract below.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
