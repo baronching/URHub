@@ -72,7 +72,17 @@ export const UDM_COLLEGES: {
   }
 ];
 
-export type UserRole = 'student_faculty' | 'admin' | 'super_admin';
+export type UserRole =
+  | 'student'
+  | 'program_chair'
+  | 'dean'
+  | 'urelia_personnel'
+  | 'urelia_director'
+  | 'urelia_admin'
+  // Legacy aliases
+  | 'student_faculty'
+  | 'admin'
+  | 'super_admin';
 
 export interface User {
   userID: string;
@@ -190,5 +200,6 @@ export interface SearchFilters {
   year: number | 'ALL';
   keyword: string | 'ALL';
   authorCategory?: 'ALL' | 'Student' | 'Faculty_Admin';
+  publicationStatus?: 'ALL' | 'published' | 'unpublished';
   sortBy: 'relevance' | 'newest' | 'views';
 }

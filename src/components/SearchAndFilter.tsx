@@ -1,26 +1,42 @@
 import React from 'react';
-import { SearchFilters, UDMCollege, UDM_COLLEGES } from '../types';
-import { Search, Filter, RotateCcw, Building2 } from 'lucide-react';
+import { SearchFilters, UDMCollege, UDM_COLLEGES, User } from '../types';
+import { canViewUnpublished, isStudent } from '../utils/userUtils';
+import { Search, Filter, RotateCcw, Building2, BookOpen, Lock } from 'lucide-react';
 
 interface SearchAndFilterProps {
   filters: SearchFilters;
   onChangeFilters: (filters: SearchFilters) => void;
   availableKeywords: string[];
   totalResults: number;
+  currentUser?: User | null;
+  onOpenAuthModal?: () => void;
 }
 
 export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   filters,
   onChangeFilters,
   availableKeywords,
-  totalResults
+  totalResults,
+  currentUser,
+  onOpenAuthModal
 }) => {
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChangeFilters({ ...filters, query: e.target.value });
   };
 
-  const handleCollegeSelect = (college: UDMCollege | 'ALL') => {
-    onChangeFilters({ ...filters, college });
+  const handleCollegeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onChangeFilters({ ...filters, college: e.target.value as UDMCollege | 'ALL' });
+  };
+
+  const handlePublicationStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (!canViewUnpublished(currentUser) && (val === 'unpublished' || val === 'ALL')) {
+      return;
+    }
+    onChangeFilters({
+      ...filters,
+      publicationStatus: val as 'ALL' | 'published' | 'unpublished'
+    });
   };
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -50,6 +66,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       year: 'ALL',
       keyword: 'ALL',
       authorCategory: 'ALL',
+      publicationStatus: canViewUnpublished(currentUser) ? 'ALL' : 'published',
       sortBy: 'relevance'
     });
   };
@@ -64,7 +81,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           value={filters.query}
           onChange={handleQueryChange}
           placeholder="Search research title, abstract keywords, authors, or thesis topic..."
-          className="w-full bg-slate-50 border border-slate-200 focus:border-[#1a4731] rounded-lg pl-12 pr-28 py-3 text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a4731]/20 transition-all font-medium"
+          className="w-full bg-slate-50 border border-slate-200 focus:border-[#1a4731] rounded-lg pl-12 pr-36 py-3 text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a4731]/20 transition-all font-medium"
         />
         <div className="absolute right-3 flex items-center space-x-2">
           {filters.query && (
@@ -75,70 +92,80 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
               Clear
             </button>
           )}
-          <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded select-none pointer-events-none">
+          <span className="text-[11px] font-bold text-[#1a4731] bg-[#1a4731]/10 border border-[#1a4731]/20 px-2 py-0.5 rounded select-none">
+            {totalResults} {totalResults === 1 ? 'Paper' : 'Papers'}
+          </span>
+          <span className="hidden sm:inline-block text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded select-none pointer-events-none">
             TF-IDF Search
           </span>
         </div>
       </div>
 
-      {/* College & Institutional Unit Filter Buttons */}
-      <div className="space-y-2">
-        <div className="flex justify-between items-center text-xs text-slate-500">
-          <span className="font-bold text-[#1a4731] flex items-center space-x-1.5">
-            <Building2 className="w-3.5 h-3.5 text-[#1a4731]" />
-            <span>Filter by UDM Units (7 Colleges + Faculty & Administration)</span>
-          </span>
-          <span className="text-[#1a4731] font-bold">{totalResults} Researches Found</span>
-        </div>
+      {/* Dropdown Filters & Controls Row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs">
+          
+          {/* UDM Unit / College Dropdown */}
+          <div className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+            <Building2 className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />
+            <span className="text-slate-500 font-medium shrink-0">Unit:</span>
+            <select
+              value={filters.college}
+              onChange={handleCollegeChange}
+              className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer max-w-[200px] sm:max-w-[240px] truncate"
+              title="Filter by UDM Units (7 Colleges + Faculty & Administration)"
+            >
+              <option value="ALL">All UDM Units (7 Colleges + Faculty & Admin)</option>
+              {UDM_COLLEGES.map(col => {
+                const isFacultyAdmin = col.id === 'FAC-ADM';
+                return (
+                  <option key={col.id} value={col.id}>
+                    {col.id} - {isFacultyAdmin ? 'Faculty & Administration' : col.name}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleCollegeSelect('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-              filters.college === 'ALL'
-                ? 'bg-[#1a4731] text-white border-[#1a4731] shadow-sm'
-                : 'bg-white text-slate-700 hover:bg-slate-50 border-[#1a4731]/40'
-            }`}
-          >
-            All Units ({UDM_COLLEGES.length})
-          </button>
-
-          {UDM_COLLEGES.map(col => {
-            const isSelected = filters.college === col.id;
-            const isFacultyAdmin = col.id === 'FAC-ADM';
-
-            return (
-              <button
-                key={col.id}
-                onClick={() => handleCollegeSelect(col.id)}
-                title={col.name}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all border cursor-pointer ${
-                  isSelected
-                    ? 'bg-[#1a4731] text-white border-[#1a4731] shadow-sm ring-2 ring-[#1a4731]/20'
-                    : isFacultyAdmin
-                    ? 'bg-amber-50/80 text-amber-950 border-amber-300 hover:bg-amber-100 shadow-2xs font-extrabold'
-                    : 'bg-white text-slate-700 hover:bg-slate-50 border-[#1a4731]/40'
-                }`}
+          {/* Publication Status Dropdown (Published / Unpublished / All) */}
+          <div className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+            {canViewUnpublished(currentUser) ? (
+              <BookOpen className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />
+            ) : (
+              <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+            )}
+            <span className="text-slate-500 font-medium shrink-0">Status:</span>
+            <select
+              value={!canViewUnpublished(currentUser) ? 'published' : (filters.publicationStatus || 'ALL')}
+              onChange={handlePublicationStatusChange}
+              className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
+            >
+              <option value="published">Published</option>
+              {canViewUnpublished(currentUser) ? (
+                <>
+                  <option value="unpublished">Unpublished</option>
+                  <option value="ALL">All Status (Published & Unpublished)</option>
+                </>
+              ) : (
+                <option value="unpublished" disabled>
+                  Unpublished (Faculty/Admin Only 🔒)
+                </option>
+              )}
+            </select>
+            {currentUser && isStudent(currentUser) && (
+              <span
+                className="text-[10px] text-amber-800 font-semibold bg-amber-100/80 px-1.5 py-0.5 rounded ml-0.5 select-none"
+                title="Students can only view approved, published research papers"
               >
-                <span className={isSelected ? 'text-[#c9a84c]' : isFacultyAdmin ? 'text-amber-800 font-extrabold' : 'text-[#1a4731]'}>
-                  {col.id}
-                </span>
-                <span className="hidden sm:inline text-[10px] opacity-90">
-                  • {isFacultyAdmin ? 'Faculty & Administration' : col.name.replace('College of ', '')}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+                Student View
+              </span>
+            )}
+          </div>
 
-      {/* Additional Dropdowns & Keywords */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
-        <div className="flex flex-wrap items-center gap-3 text-xs">
           {/* Year Selector */}
-          <div className="flex items-center space-x-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            <Filter className="w-3.5 h-3.5 text-[#1a4731]" />
-            <span className="text-slate-500 font-medium">Year:</span>
+          <div className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+            <Filter className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />
+            <span className="text-slate-500 font-medium shrink-0">Year:</span>
             <select
               value={filters.year.toString()}
               onChange={handleYearChange}
@@ -153,8 +180,8 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           </div>
 
           {/* Sort Selector */}
-          <div className="flex items-center space-x-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            <span className="text-slate-500 font-medium">Sort By:</span>
+          <div className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+            <span className="text-slate-500 font-medium shrink-0">Sort By:</span>
             <select
               value={filters.sortBy}
               onChange={handleSortChange}
@@ -169,7 +196,8 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           {/* Reset Filters */}
           <button
             onClick={resetFilters}
-            className="flex items-center space-x-1 text-slate-500 hover:text-rose-600 transition-colors px-2 py-1 font-medium"
+            className="flex items-center space-x-1 text-slate-500 hover:text-rose-600 transition-colors px-2 py-1 font-medium cursor-pointer"
+            title="Reset all filters"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset</span>
@@ -184,7 +212,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
               <button
                 key={kw}
                 onClick={() => handleKeywordClick(kw)}
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-colors cursor-pointer ${
                   filters.keyword === kw
                     ? 'bg-[#1a4731] text-white'
                     : 'bg-[#c9a84c]/10 text-[#1a4731] hover:bg-[#c9a84c]/20 border border-[#c9a84c]/30'

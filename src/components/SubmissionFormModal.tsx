@@ -215,7 +215,7 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 
       const newSubmission: Submission = {
         submissionID: subId,
-        submittedBy: currentUser?.userID || 'USR-UDM-GUEST',
+        submittedBy: currentUser?.userID || 'USR-UDM-001',
         submitterName: currentUser?.name || 'UDM Researcher',
         submitterEmail: currentUser?.email || 'researcher@udm.edu.ph',
         researchID: resId,

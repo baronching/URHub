@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Research, User, AccessRequest, UDM_COLLEGES } from '../types';
+import { canViewUnpublished } from '../utils/userUtils';
 import { ManuscriptReader } from './ManuscriptReader';
 import jsPDF from 'jspdf';
 import {
@@ -345,11 +346,28 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
               {research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? 'F&A' : research.department}
             </div>
             <div className="min-w-0 flex-1">
-              <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider block truncate ${
-                research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? 'text-amber-800' : 'text-[#1a4731]'
-              }`}>
-                {collegeInfo?.name || research.department}
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider block truncate ${
+                  research.department === 'FAC-ADM' || research.authorCategory === 'Faculty_Admin' ? 'text-amber-800' : 'text-[#1a4731]'
+                }`}>
+                  {collegeInfo?.name || research.department}
+                </span>
+                {research.status === 'pending' && (
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                    Unpublished
+                  </span>
+                )}
+                {research.status === 'rejected' && (
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                    Unpublished (Rejected)
+                  </span>
+                )}
+                {(research.status === 'approved' || (!research.status && research.status !== 'pending' && research.status !== 'rejected')) && (
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Published
+                  </span>
+                )}
+              </div>
               <h2 
                 id="modal-research-title"
                 className="text-xs sm:text-sm md:text-base font-bold text-slate-900 truncate leading-tight"
@@ -461,36 +479,33 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
             </div>
           )}
 
-          {activeTab === 'abstract' ? (
+          {(research.status === 'pending' || research.status === 'rejected') && !canViewUnpublished(currentUser) ? (
+            <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
+                <Lock className="w-7 h-7 text-amber-700" />
+              </div>
+              <div className="space-y-1.5 max-w-md mx-auto">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">Restricted Unpublished Manuscript</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  This research paper is currently unpublished or pending administrative review. Unpublished manuscripts are exclusively accessible by Universidad de Manila Faculty, Administration, and the URELIA Office.
+                </p>
+              </div>
+              {!currentUser && onOpenAuthModal && (
+                <button
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="px-5 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
+                >
+                  <KeyRound className="w-4 h-4 text-[#c9a84c]" />
+                  <span>Sign In as Faculty / Admin</span>
+                </button>
+              )}
+            </div>
+          ) : activeTab === 'abstract' ? (
             /* ABSTRACT & METADATA VIEW */
             <div className="space-y-4 sm:space-y-6">
-              {/* Login Requirement Banner or Direct Access Card */}
-              {!currentUser ? (
-                <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50/90 via-slate-50 to-emerald-50/50 border border-amber-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
-                  <div className="flex items-start space-x-3 min-w-0">
-                    <div className="p-2 rounded-lg bg-amber-100 text-amber-800 shrink-0 border border-amber-200">
-                      <Lock className="w-5 h-5 text-amber-700" />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm mb-0.5">
-                        Sign In Required for Full Paper & Abstract Download
-                      </h4>
-                      <p className="text-slate-600 leading-normal">
-                        Abstract and metadata are publicly readable. Log in with your official UDM account to read the full 14-page manuscript or download the abstract PDF.
-                      </p>
-                    </div>
-                  </div>
-                  {onOpenAuthModal && (
-                    <button
-                      onClick={onOpenAuthModal}
-                      className="self-start sm:self-center px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-2 cursor-pointer shrink-0 transition-all active:scale-98"
-                    >
-                      <KeyRound className="w-3.5 h-3.5 text-[#c9a84c]" />
-                      <span>Sign In with UDM Account</span>
-                    </button>
-                  )}
-                </div>
-              ) : (
+              {/* Direct Access Card for Authenticated UDM Researcher */}
+              {currentUser && (
                 <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
                   <div className="flex items-center space-x-2.5 min-w-0">
                     <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
@@ -818,34 +833,11 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
             </div>
             )
           ) : (
-            /* VIEW-ONLY FULL DOCUMENT READER MODE - REQUIRES LOGIN */
-            !currentUser ? (
-              <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-2">
-                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
-                  <Lock className="w-7 h-7 text-amber-700" />
-                </div>
-                <div className="space-y-1.5 max-w-md mx-auto">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Sign In to Read Full Research</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    The complete 14-page research manuscript is viewable in protected mode by authenticated Universidad de Manila students, faculty, and administration accounts. Please sign in to read the full paper.
-                  </p>
-                </div>
-                {onOpenAuthModal && (
-                  <button
-                    onClick={onOpenAuthModal}
-                    className="px-5 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
-                  >
-                    <KeyRound className="w-4 h-4 text-[#c9a84c]" />
-                    <span>Sign In to Read Full Paper</span>
-                  </button>
-                )}
-              </div>
-            ) : (
-              <ManuscriptReader
-                research={research}
-                onDownloadAbstract={handleDownloadAbstractPdf}
-              />
-            )
+            /* VIEW-ONLY FULL DOCUMENT READER MODE FOR AUTHENTICATED UDM USERS */
+            <ManuscriptReader
+              research={research}
+              onDownloadAbstract={handleDownloadAbstractPdf}
+            />
           )}
         </div>
       </div>

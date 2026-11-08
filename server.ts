@@ -3,6 +3,7 @@
  * Universidad de Manila - URELIA Office
  */
 
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import http from 'http';
 import path from 'path';
@@ -10,7 +11,7 @@ import { GoogleGenAI } from '@google/genai';
 import { INITIAL_RESEARCH, INITIAL_SUBMISSIONS, INITIAL_SYSTEM_SETTINGS, INITIAL_USERS } from './src/data/mockDatabase';
 import { generateHybridRecommendations, calculateIDF, getResearchTokens, scoreSearchRelevance } from './src/utils/mlEngine';
 import { generateContextualAcademicAnswer } from './src/utils/researchAiAssistant';
-import { Research, Submission, User, SystemSettings, UDMCollege, UDM_COLLEGES } from './src/types';
+import { Research, Submission, User, SystemSettings, UDMCollege, UDM_COLLEGES, UserRole } from './src/types';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
@@ -73,6 +74,76 @@ const getHostingerTransporter = () => {
     }
   });
 };
+
+// Pending Registration 6-Digit Numeric OTP Store
+interface PendingRegistration {
+  code: string; // Strictly 6-digit numeric OTP
+  expiresAt: number;
+  payload: {
+    fullName: string;
+    email: string;
+    password: string;
+    role: string;
+    college: string;
+    idNumber: string;
+    courseProgram: string;
+    yearLevel?: string;
+  };
+}
+const pendingRegistrationOTPs = new Map<string, PendingRegistration>();
+
+// Send 6-Digit Numeric Verification OTP via Hostinger SMTP
+async function sendNumericOTPEmail(toEmail: string, fullName: string, otpCode: string): Promise<boolean> {
+  const transporter = getHostingerTransporter();
+  console.log(`\n================================================================`);
+  console.log(`[UDM OTP] Registration Verification for: ${toEmail}`);
+  console.log(`[UDM OTP] 6-DIGIT NUMERIC CODE (NUMBERS ONLY): >>> [ ${otpCode} ] <<<`);
+  console.log(`================================================================\n`);
+
+  if (!transporter) {
+    console.warn(`[UDM OTP] Hostinger SMTP credentials not set. Code [ ${otpCode} ] logged to console for test/dev.`);
+    return false;
+  }
+
+  try {
+    const sender = process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER || 'no-reply@udmrhub.site';
+    await transporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME || 'UDM ResearchHub - URELIA'}" <${sender}>`,
+      to: toEmail,
+      subject: `[${otpCode}] Your UDM ResearchHub 6-Digit Verification Code`,
+      html: `
+        <div style="font-family: Arial, Helvetica, sans-serif; max-width: 580px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+          <div style="background-color: #1a4731; padding: 24px; text-align: center; border-bottom: 3px solid #c9a84c;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: bold; letter-spacing: 1px;">UNIVERSIDAD DE MANILA</h1>
+            <p style="color: #c9a84c; margin: 4px 0 0 0; font-size: 13px; font-weight: 600;">URELIA Office • Research & Archival Portal</p>
+          </div>
+          <div style="padding: 32px 24px;">
+            <h2 style="color: #1a4731; margin-top: 0; font-size: 18px;">Account Email Verification</h2>
+            <p style="color: #334155; font-size: 14px; line-height: 1.6;">Hello <strong>${fullName || 'UDM Scholar'}</strong>,</p>
+            <p style="color: #334155; font-size: 14px; line-height: 1.6;">Please use the <strong>6-digit verification code (numbers only)</strong> below to confirm your institutional email and activate your UDM ResearchHub account:</p>
+            
+            <div style="margin: 28px 0; text-align: center;">
+              <div style="display: inline-block; background-color: #f0fdf4; border: 2px dashed #1a4731; border-radius: 12px; padding: 18px 36px;">
+                <span style="font-family: 'Courier New', Courier, monospace; font-size: 38px; font-weight: 900; letter-spacing: 10px; color: #1a4731;">${otpCode}</span>
+              </div>
+              <p style="color: #64748b; font-size: 12px; margin-top: 8px;">(Strictly 6 numeric digits • Valid for 15 minutes)</p>
+            </div>
+
+            <p style="color: #334155; font-size: 13px; line-height: 1.6;">If you did not request this verification, please disregard this message or contact the URELIA Office.</p>
+          </div>
+          <div style="background-color: #f8fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b;">
+            <p style="margin: 0;">© 2026 Universidad de Manila • URELIA Office • Republic Act 10173 Compliant</p>
+          </div>
+        </div>
+      `
+    });
+    console.log(`[UDM OTP] Verification email dispatched successfully to ${toEmail}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[UDM OTP] Hostinger SMTP sendMail error:`, err.message);
+    return false;
+  }
+}
 
 // ==========================================
 // RESTFUL API ENDPOINTS
@@ -158,11 +229,11 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // Validate UDM domain constraint
+  // Validate allowed domain constraint (UDM or personal Gmail)
   const isValidDomain = settingsDB.allowedDomains.some(domain => cleanEmail.endsWith(`@${domain}`));
   if (!isValidDomain) {
     return res.status(403).json({
-      error: 'Access restricted: Only official UDM email addresses (@udm.edu.ph, @pau.udm.edu.ph) are allowed.'
+      error: 'Access restricted: Only official UDM (@udm.edu.ph) or personal Gmail (@gmail.com) email addresses are allowed.'
     });
   }
 
@@ -170,7 +241,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
   if (!user) {
     return res.status(401).json({
-      error: 'Account not found. Please register and confirm your official @udm.edu.ph email address before signing in.'
+      error: 'Account not found. Please register and confirm your email address (@udm.edu.ph or @gmail.com) before signing in.'
     });
   }
 
@@ -197,17 +268,17 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // Check domain constraint
+  // Check domain constraint (UDM or personal Gmail)
   const isValidDomain = settingsDB.allowedDomains.some(domain => cleanEmail.endsWith(`@${domain}`));
   if (!isValidDomain) {
     return res.status(403).json({
-      error: 'Access restricted: Registration is strictly limited to UDM institutional emails (@udm.edu.ph).'
+      error: 'Access restricted: Registration is limited to UDM institutional emails (@udm.edu.ph) and personal Gmail (@gmail.com).'
     });
   }
 
   // Check existing
   if (usersDB.some(u => u.email.toLowerCase() === cleanEmail)) {
-    return res.status(400).json({ error: 'An account with this UDM email already exists.' });
+    return res.status(400).json({ error: 'An account with this email already exists.' });
   }
 
   const newUser: User = {
@@ -227,6 +298,156 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
   res.status(201).json({
     message: 'UDM account successfully registered.',
     user: safeUser
+  });
+});
+
+// 1. Send 6-Digit Numeric Verification OTP on Registration
+app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) => {
+  const { fullName, email, password, role, college, idNumber, courseProgram, yearLevel } = req.body;
+
+  if (!email || !password || !fullName) {
+    return res.status(400).json({ error: 'Full name, UDM email, and password are required.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Validate official UDM domain or personal Gmail
+  const isAllowedDomain = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
+  if (!isAllowedDomain) {
+    return res.status(403).json({
+      error: 'Registration requires an official UDM email (@udm.edu.ph) or personal Gmail (@gmail.com).'
+    });
+  }
+
+  // Check if already registered in database
+  if (usersDB.some(u => u.email.toLowerCase() === cleanEmail)) {
+    return res.status(400).json({
+      error: 'An account with this email is already registered. Please go to the Sign In tab to log in.'
+    });
+  }
+
+  // Generate strictly numeric 6-digit OTP (e.g. 100000 to 999999)
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Store in pending map (15 minutes expiry)
+  pendingRegistrationOTPs.set(cleanEmail, {
+    code: otpCode,
+    expiresAt: Date.now() + 15 * 60 * 1000,
+    payload: {
+      fullName: fullName.trim(),
+      email: cleanEmail,
+      password,
+      role: role || 'student',
+      college: college || 'CCS',
+      idNumber: (idNumber || '').trim(),
+      courseProgram: (courseProgram || '').trim(),
+      yearLevel: yearLevel || '1st Year'
+    }
+  });
+
+  // Dispatch email with 6-digit numeric OTP
+  await sendNumericOTPEmail(cleanEmail, fullName, otpCode);
+
+  res.status(200).json({
+    success: true,
+    needsVerification: true,
+    email: cleanEmail,
+    message: `A 6-digit numeric verification code has been dispatched to ${cleanEmail}.`
+  });
+});
+
+// 2. Verify 6-Digit Numeric Registration OTP & Activate User
+app.post('/api/auth/verify-registration-otp', (req: Request, res: Response) => {
+  const { email, otpCode } = req.body;
+
+  if (!email || !otpCode) {
+    return res.status(400).json({ error: 'Email and 6-digit verification code are required.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanCode = otpCode.toString().trim().replace(/\D/g, '');
+
+  if (!/^\d{6}$/.test(cleanCode)) {
+    return res.status(400).json({ error: 'Please enter a valid 6-digit numeric verification code (numbers only).' });
+  }
+
+  const pending = pendingRegistrationOTPs.get(cleanEmail);
+  if (!pending) {
+    return res.status(400).json({
+      error: 'No pending registration found for this email, or the code has expired. Please register again.'
+    });
+  }
+
+  if (Date.now() > pending.expiresAt) {
+    pendingRegistrationOTPs.delete(cleanEmail);
+    return res.status(400).json({
+      error: 'Your verification code has expired. Please request a new code.'
+    });
+  }
+
+  if (pending.code !== cleanCode) {
+    return res.status(400).json({
+      error: 'Incorrect 6-digit verification code. Please check your email and enter the numbers sent.'
+    });
+  }
+
+  // Code is valid! Create and activate user
+  const { payload } = pending;
+  const newUser: User = {
+    userID: `USR-UDM-${Date.now().toString().slice(-4)}`,
+    name: payload.fullName,
+    fullName: payload.fullName,
+    email: cleanEmail,
+    password: payload.password,
+    role: (payload.role as UserRole) || 'student',
+    userType: payload.role === 'Faculty_Admin' || payload.role === 'Faculty' ? 'Faculty_Admin' : (payload.role === 'student' ? 'Student' : (payload.role as any)),
+    college: (payload.college as UDMCollege) || 'CCS',
+    idNumber: payload.idNumber,
+    courseProgram: payload.courseProgram,
+    yearLevel: payload.yearLevel,
+    dateRegistered: new Date().toISOString(),
+    readingHistory: []
+  };
+
+  usersDB.push(newUser);
+  pendingRegistrationOTPs.delete(cleanEmail);
+
+  const { password: _, ...safeUser } = newUser;
+  res.status(200).json({
+    success: true,
+    message: 'Account successfully verified and activated! Welcome to UDM ResearchHub.',
+    user: safeUser
+  });
+});
+
+// 3. Resend 6-Digit Numeric OTP
+app.post('/api/auth/resend-verification-otp', async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const pending = pendingRegistrationOTPs.get(cleanEmail);
+
+  if (!pending) {
+    return res.status(400).json({
+      error: 'No pending registration found for this email. Please submit your registration details first.'
+    });
+  }
+
+  // Generate a fresh 6-digit numeric OTP
+  const freshCode = Math.floor(100000 + Math.random() * 900000).toString();
+  pending.code = freshCode;
+  pending.expiresAt = Date.now() + 15 * 60 * 1000;
+  pendingRegistrationOTPs.set(cleanEmail, pending);
+
+  await sendNumericOTPEmail(cleanEmail, pending.payload.fullName, freshCode);
+
+  res.status(200).json({
+    success: true,
+    message: `A fresh 6-digit numeric verification code has been dispatched to ${cleanEmail}.`
   });
 });
 

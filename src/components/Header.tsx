@@ -1,6 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User } from '../types';
-import { getUserRoleDisplayLabel, formatUserDisplayName, isUrelia, canSubmitResearch } from '../utils/userUtils';
+import {
+  getUserRoleDisplayLabel,
+  formatUserDisplayName,
+  isUrelia,
+  canSubmitResearch,
+  canReviewSubmissions,
+  canViewAnalytics,
+  canManageUsers,
+  getRoleBadgeClass
+} from '../utils/userUtils';
 import { 
   ShieldCheck, 
   User as UserIcon, 
@@ -37,8 +46,11 @@ export const Header: React.FC<HeaderProps> = ({
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const isUreliaUser = isUrelia(currentUser);
   const userCanSubmit = canSubmitResearch(currentUser);
+  const userCanReview = canReviewSubmissions(currentUser);
+  const userCanAnalytics = canViewAnalytics(currentUser);
+  const userCanManageUsers = canManageUsers(currentUser);
+  const showManagementMenu = userCanAnalytics || userCanManageUsers;
   const isDropdownTabActive = activeTab === 'analytics' || activeTab === 'super_admin';
 
   // Close dropdown on outside click
@@ -161,8 +173,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* URELIA Review Queue Tab */}
-            {isUreliaUser && (
+            {/* Review Queue Tab (Program Chair, Dean, URELIA) */}
+            {userCanReview && (
               <button
                 onClick={() => handleTabClick('admin_review')}
                 className={`px-2.5 py-1.5 xl:px-3 xl:py-2 rounded-lg text-xs font-semibold flex items-center space-x-1.5 whitespace-nowrap transition-colors select-none cursor-pointer ${
@@ -176,8 +188,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* URELIA Tools Dropdown (Analytics & Reports, User Management) */}
-            {isUreliaUser && (
+            {/* Management Dropdown (Analytics & Reports, User Management) */}
+            {showManagementMenu && (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setAdminDropdownOpen(!adminDropdownOpen)}
@@ -198,35 +210,39 @@ export const Header: React.FC<HeaderProps> = ({
 
                 {adminDropdownOpen && (
                   <div className="absolute right-0 mt-1.5 w-52 bg-[#113122] border border-[#c9a84c]/40 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                    <button
-                      onClick={() => handleTabClick('analytics')}
-                      className={`w-full text-left px-3.5 py-2 text-xs flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                        activeTab === 'analytics'
-                          ? 'bg-[#c9a84c] text-[#1a4731] font-bold'
-                          : 'text-white/90 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      <BarChart3 className="w-4 h-4 shrink-0" />
-                      <div className="flex flex-col">
-                        <span className="font-semibold leading-tight">Analytics & Reports</span>
-                        <span className="text-[10px] opacity-75">Metrics, downloads & trends</span>
-                      </div>
-                    </button>
+                    {userCanAnalytics && (
+                      <button
+                        onClick={() => handleTabClick('analytics')}
+                        className={`w-full text-left px-3.5 py-2 text-xs flex items-center space-x-2.5 transition-colors cursor-pointer ${
+                          activeTab === 'analytics'
+                            ? 'bg-[#c9a84c] text-[#1a4731] font-bold'
+                            : 'text-white/90 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <BarChart3 className="w-4 h-4 shrink-0" />
+                        <div className="flex flex-col">
+                          <span className="font-semibold leading-tight">Analytics & Reports</span>
+                          <span className="text-[10px] opacity-75">Metrics, downloads & trends</span>
+                        </div>
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() => handleTabClick('super_admin')}
-                      className={`w-full text-left px-3.5 py-2 text-xs flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                        activeTab === 'super_admin'
-                          ? 'bg-[#c9a84c] text-[#1a4731] font-bold'
-                          : 'text-white/90 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      <Settings className="w-4 h-4 shrink-0" />
-                      <div className="flex flex-col">
-                        <span className="font-semibold leading-tight">User Management</span>
-                        <span className="text-[10px] opacity-75">User roles & permissions</span>
-                      </div>
-                    </button>
+                    {userCanManageUsers && (
+                      <button
+                        onClick={() => handleTabClick('super_admin')}
+                        className={`w-full text-left px-3.5 py-2 text-xs flex items-center space-x-2.5 transition-colors cursor-pointer ${
+                          activeTab === 'super_admin'
+                            ? 'bg-[#c9a84c] text-[#1a4731] font-bold'
+                            : 'text-white/90 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <Settings className="w-4 h-4 shrink-0" />
+                        <div className="flex flex-col">
+                          <span className="font-semibold leading-tight">User Management</span>
+                          <span className="text-[10px] opacity-75">User roles & permissions</span>
+                        </div>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -248,7 +264,7 @@ export const Header: React.FC<HeaderProps> = ({
                     </span>
                     <span className="text-[10px] text-[#c9a84c] font-mono capitalize flex items-center justify-end space-x-1">
                       <ShieldCheck className="w-3 h-3 text-[#c9a84c] shrink-0" />
-                      <span className="whitespace-nowrap">
+                      <span className={`px-1.5 py-0.2 rounded font-semibold whitespace-nowrap ${getRoleBadgeClass(currentUser.role)}`}>
                         {getUserRoleDisplayLabel(currentUser)}
                       </span>
                     </span>
@@ -321,7 +337,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {isUreliaUser && (
+              {userCanReview && (
                 <button
                   onClick={() => handleTabClick('admin_review')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -335,7 +351,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {isUreliaUser && (
+              {userCanAnalytics && (
                 <button
                   onClick={() => handleTabClick('analytics')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -349,7 +365,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {isUreliaUser && (
+              {userCanManageUsers && (
                 <button
                   onClick={() => handleTabClick('super_admin')}
                   className={`w-full px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -372,8 +388,10 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-xs font-bold text-white">
                       {formatUserDisplayName(currentUser.name)}
                     </span>
-                    <span className="text-[10px] text-[#c9a84c] font-mono capitalize">
-                      {getUserRoleDisplayLabel(currentUser)}
+                    <span className="text-[10px] text-[#c9a84c] font-mono capitalize mt-0.5">
+                      <span className={`px-1.5 py-0.2 rounded font-semibold ${getRoleBadgeClass(currentUser.role)}`}>
+                        {getUserRoleDisplayLabel(currentUser)}
+                      </span>
                     </span>
                   </div>
                   <button

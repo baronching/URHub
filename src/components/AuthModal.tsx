@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, UDMCollege, UDM_COLLEGES } from '../types';
+import { User, UserRole, UDMCollege, UDM_COLLEGES } from '../types';
 import {
   registerUserWithSupabase,
   loginUserWithSupabase,
@@ -33,11 +33,12 @@ import {
 interface AuthModalProps {
   onClose: () => void;
   onLoginSuccess: (user: User) => void;
+  isForcedAuth?: boolean;
 }
 
 type AuthViewMode = 'signin' | 'register' | 'verify_otp' | 'forgot_password';
 
-export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, isForcedAuth = false }) => {
   const [viewMode, setViewMode] = useState<AuthViewMode>('signin');
 
   // Lock background scroll
@@ -51,7 +52,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
     document.body.style.touchAction = 'none';
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !isForcedAuth) onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
 
@@ -68,7 +69,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [userType, setUserType] = useState<'Student' | 'Faculty_Admin'>('Student');
+  const [userType, setUserType] = useState<UserRole>('student');
   const [college, setCollege] = useState<UDMCollege>('CCS');
   const [idNumber, setIdNumber] = useState('');
   const [courseProgram, setCourseProgram] = useState('');
@@ -118,8 +119,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
         const cleanEmail = email.trim().toLowerCase();
 
         // 1. Domain Validation
-        if (!cleanEmail.endsWith('@udm.edu.ph')) {
-          throw new Error('Registration requires an official UDM email address ending in @udm.edu.ph');
+        const isAllowedEmail = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
+        if (!isAllowedEmail) {
+          throw new Error('Registration requires an official UDM email (@udm.edu.ph) or personal Gmail (@gmail.com).');
         }
 
         // 2. Passwords Match
@@ -145,11 +147,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
           email: cleanEmail,
           password,
           confirmPassword,
-          role: userType === 'Faculty_Admin' ? 'Faculty/Admin' : 'Student',
+          role: userType,
           college,
           idNumber,
           courseProgram,
-          yearLevel: userType === 'Student' ? yearLevel : undefined
+          yearLevel: userType === 'student' ? yearLevel : undefined
         });
 
         if (result.needsVerification) {
@@ -243,8 +245,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
     try {
       const cleanEmail = resetEmail.trim().toLowerCase();
-      if (!cleanEmail.endsWith('@udm.edu.ph')) {
-        throw new Error('Please enter a valid @udm.edu.ph institutional email address.');
+      const isAllowedEmail = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
+      if (!isAllowedEmail) {
+        throw new Error('Please enter a valid @udm.edu.ph institutional email or @gmail.com address.');
       }
 
       await requestPasswordReset(cleanEmail);
@@ -295,7 +298,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${isForcedAuth ? 'bg-slate-950/85 backdrop-blur-md' : 'bg-slate-900/60 backdrop-blur-sm'} animate-in fade-in duration-200`}>
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden my-6 max-h-[90vh] flex flex-col">
 
         {/* Header */}
@@ -315,13 +318,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors relative z-10 cursor-pointer"
-            title="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!isForcedAuth && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors relative z-10 cursor-pointer"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Scrollable Form Body */}
@@ -404,14 +409,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                   <Mail className="w-3.5 h-3.5 text-[#1a4731]" />
-                  <span>UDM Institutional Email * (@udm.edu.ph)</span>
+                  <span>Email Address * (@udm.edu.ph or @gmail.com)</span>
                 </label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="yourname@udm.edu.ph"
+                  placeholder="yourname@udm.edu.ph or yourname@gmail.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
                 />
               </div>
@@ -485,11 +490,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                   </label>
                   <select
                     value={userType}
-                    onChange={e => setUserType(e.target.value as 'Student' | 'Faculty_Admin')}
+                    onChange={e => setUserType(e.target.value as UserRole)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
                   >
-                    <option value="Student">Student</option>
-                    <option value="Faculty_Admin">Faculty/Admin</option>
+                    <option value="student">Student</option>
+                    <option value="program_chair">Program Chair</option>
+                    <option value="dean">College Dean</option>
+                    <option value="urelia_personnel">URELIA / Research Personnel</option>
+                    <option value="urelia_director">URELIA Director</option>
+                    <option value="urelia_admin">URELIA Admin</option>
                   </select>
                 </div>
 
@@ -523,7 +532,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                   required
                   value={idNumber}
                   onChange={e => setIdNumber(e.target.value)}
-                  placeholder={userType === 'Student' ? '2023-10452' : 'FAC-2021-08'}
+                  placeholder={userType === 'student' ? '2023-10452' : 'FAC-2021-08'}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
                 />
               </div>
@@ -546,7 +555,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 </div>
 
                 {/* Year Level (Only for Students) */}
-                {userType === 'Student' && (
+                {userType === 'student' && (
                   <div className="animate-in fade-in duration-200">
                     <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                       <GraduationCap className="w-3.5 h-3.5 text-[#1a4731]" />
@@ -669,6 +678,87 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     : 'Sign In to UDM-ResearchHub'}
                 </span>
               </button>
+
+              {/* Quick Demo Accounts Selection */}
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                  <span>Quick Test Roles (One-Click Fill)</span>
+                  <span className="text-[#1a4731] lowercase text-[9px] font-mono">6 official roles</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-left">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('jdelacruz@udm.edu.ph');
+                      setPassword('Password123!');
+                    }}
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">1. Student</div>
+                    <div className="text-[9px] text-slate-500 truncate">Juan Dela Cruz</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('msantos@udm.edu.ph');
+                      setPassword('Password123!');
+                    }}
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">2. Program Chair</div>
+                    <div className="text-[9px] text-slate-500 truncate">Prof. Maria Santos</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('cperez.dean@udm.edu.ph');
+                      setPassword('Password123!');
+                    }}
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">3. College Dean</div>
+                    <div className="text-[9px] text-slate-500 truncate">Dr. Carmelo Perez</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('mtan.research@udm.edu.ph');
+                      setPassword('Password123!');
+                    }}
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">4. Research Staff</div>
+                    <div className="text-[9px] text-slate-500 truncate">Mark Anthony Tan</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('areyes.urelia@udm.edu.ph');
+                      setPassword('AdminPassword123!');
+                    }}
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">5. URELIA Director</div>
+                    <div className="text-[9px] text-slate-500 truncate">Dr. Alejandro Reyes</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('sysadmin@udm.edu.ph');
+                      setPassword('SuperAdmin123!');
+                    }}
+                    className="p-2 rounded-lg border border-[#c9a84c]/50 hover:border-[#1a4731] bg-[#1a4731]/5 hover:bg-[#1a4731]/10 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="text-[11px] font-bold text-[#1a4731]">6. URELIA Admin</div>
+                    <div className="text-[9px] text-slate-500 truncate">System Admin</div>
+                  </button>
+                </div>
+              </div>
             </form>
           )}
 
@@ -718,19 +808,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     className="w-full max-w-[240px] mx-auto block bg-slate-50 border-2 border-slate-300 focus:border-[#1a4731] rounded-xl py-3 text-center text-2xl font-mono tracking-[0.5em] font-extrabold text-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#1a4731]/15 transition-all"
                   />
 
-                  {/* Institutional Outlook / M365 Tip */}
+                  {/* Institutional Outlook / Gmail Tip */}
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3 text-left space-y-1 text-amber-950">
                     <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900">
                       <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                      <span>Important for @udm.edu.ph Outlook Users:</span>
+                      <span>Notice for Outlook & Gmail Users:</span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-amber-900">
-                      Microsoft 365 routes new automated emails from <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px] font-mono">blching@udmrhub.site</code> directly to your <strong>Junk Email</strong> folder.
+                      Automated security messages may be routed to your Outlook <strong>Junk Email</strong> folder or Gmail <strong>Spam / Updates</strong> tab.
                     </p>
                     <ul className="list-disc list-inside text-[11px] text-amber-800 space-y-0.5 pt-0.5">
-                      <li>Check your Outlook <strong>Junk Email</strong> or <strong>Other</strong> tab.</li>
-                      <li>Click <strong>"Not Junk"</strong> so future research notices reach your inbox.</li>
-                      <li>Verification codes remain active for <strong>24 hours</strong>.</li>
+                      <li>Check your Junk Email or Spam folder if not found in Inbox.</li>
+                      <li>Click <strong>"Not Junk / Not Spam"</strong> so future research notices reach your inbox.</li>
+                      <li>Verification codes remain active for <strong>15 minutes</strong>.</li>
                     </ul>
                   </div>
                 </div>
@@ -795,10 +885,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 </button>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">
-                    Recover UDM Account Password
+                    Recover Account Password
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Verify your identity via your registered @udm.edu.ph institutional inbox
+                    Verify your identity via your registered @udm.edu.ph or @gmail.com inbox
                   </p>
                 </div>
               </div>
@@ -808,14 +898,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                       <Mail className="w-3.5 h-3.5 text-[#1a4731]" />
-                      <span>UDM Institutional Email (@udm.edu.ph)</span>
+                      <span>Email Address (@udm.edu.ph or @gmail.com)</span>
                     </label>
                     <input
                       type="email"
                       required
                       value={resetEmail}
                       onChange={e => setResetEmail(e.target.value)}
-                      placeholder="yourname@udm.edu.ph"
+                      placeholder="yourname@udm.edu.ph or yourname@gmail.com"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none font-mono"
                     />
                   </div>
@@ -945,7 +1035,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
               >
                 {viewMode === 'register'
                   ? 'Already registered? Click here to Sign In'
-                  : "Don't have an account? Register with your @udm.edu.ph email"}
+                  : "Don't have an account? Register with your @udm.edu.ph or @gmail.com email"}
               </button>
             </div>
           )}

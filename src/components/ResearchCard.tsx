@@ -65,6 +65,21 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
                 ? 'Faculty & Administration'
                 : collegeInfo?.name.replace('College of ', '') || research.department}
             </span>
+            {research.status === 'pending' && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
+                Unpublished
+              </span>
+            )}
+            {research.status === 'rejected' && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shrink-0">
+                Rejected
+              </span>
+            )}
+            {(research.status === 'approved' || (!research.status && research.status !== 'pending' && research.status !== 'rejected')) && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+                Published
+              </span>
+            )}
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3 text-[11px] sm:text-xs text-slate-500 font-medium shrink-0">

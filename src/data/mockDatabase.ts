@@ -12,7 +12,8 @@ export const INITIAL_USERS: User[] = [
     name: 'Juan Dela Cruz',
     email: 'jdelacruz@udm.edu.ph',
     password: 'Password123!',
-    role: 'student_faculty',
+    role: 'student',
+    userType: 'Student',
     college: 'CCS',
     course: 'BS in Computer Science',
     readingHistory: ['RES-CCS-2024-001', 'RES-CCS-2024-002', 'RES-CBM-2024-001']
@@ -22,19 +23,43 @@ export const INITIAL_USERS: User[] = [
     name: 'Prof. Maria Santos',
     email: 'msantos@udm.edu.ph',
     password: 'Password123!',
-    role: 'student_faculty',
+    role: 'program_chair',
+    userType: 'Faculty',
     college: 'CED',
     course: 'Bachelor of Secondary Education',
     readingHistory: ['RES-CED-2024-001', 'RES-CAS-2024-001']
+  },
+  {
+    userID: 'USR-UDM-005',
+    name: 'Dr. Carmelo Perez',
+    email: 'cperez.dean@udm.edu.ph',
+    password: 'Password123!',
+    role: 'dean',
+    userType: 'Faculty',
+    college: 'CCS',
+    course: 'College of Computer Studies Dean',
+    readingHistory: ['RES-CCS-2024-001', 'RES-CCS-2024-002']
+  },
+  {
+    userID: 'USR-UDM-006',
+    name: 'Mark Anthony Tan',
+    email: 'mtan.research@udm.edu.ph',
+    password: 'Password123!',
+    role: 'urelia_personnel',
+    userType: 'Faculty_Admin',
+    college: 'FAC-ADM',
+    course: 'URELIA Research Staff',
+    readingHistory: ['RES-FAC-2025-003', 'RES-ADM-2025-001']
   },
   {
     userID: 'USR-UDM-003',
     name: 'Dr. Alejandro Reyes',
     email: 'areyes.urelia@udm.edu.ph',
     password: 'AdminPassword123!',
-    role: 'admin',
+    role: 'urelia_director',
+    userType: 'Faculty_Admin',
     college: 'CPPG',
-    course: 'BS in Public Administration',
+    course: 'Director of URELIA',
     readingHistory: ['RES-CPPG-2024-001', 'RES-CCJ-2024-001']
   },
   {
@@ -42,7 +67,8 @@ export const INITIAL_USERS: User[] = [
     name: 'Engr. System Admin',
     email: 'sysadmin@udm.edu.ph',
     password: 'SuperAdmin123!',
-    role: 'super_admin',
+    role: 'urelia_admin',
+    userType: 'Faculty_Admin',
     college: 'CCS',
     course: 'BS in Information Technology',
     readingHistory: []
@@ -311,7 +337,7 @@ export const INITIAL_SUBMISSIONS: Submission[] = [
 ];
 
 export const INITIAL_SYSTEM_SETTINGS: SystemSettings = {
-  allowedDomains: ['udm.edu.ph', 'pau.udm.edu.ph'],
+  allowedDomains: ['udm.edu.ph', 'pau.udm.edu.ph', 'gmail.com'],
   maxPdfUploadMb: 100,
   requireAdminApproval: true,
   enableMlRecommendations: true,

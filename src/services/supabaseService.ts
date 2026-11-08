@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Research, Submission, User, SystemSettings, UDMCollege, AccessRequest, UDM_COLLEGES } from '../types';
+import { Research, Submission, User, UserRole, SystemSettings, UDMCollege, AccessRequest, UDM_COLLEGES } from '../types';
 import {
   INITIAL_RESEARCH,
   INITIAL_USERS,
@@ -584,7 +584,7 @@ export interface RegisterPayload {
   email: string;
   password?: string;
   confirmPassword?: string;
-  role: 'Student' | 'Faculty' | 'Faculty_Admin' | 'Faculty/Admin';
+  role: 'Student' | 'Faculty' | 'Faculty_Admin' | 'Faculty/Admin' | UserRole;
   college: UDMCollege;
   idNumber: string;
   courseProgram: string;
@@ -600,12 +600,15 @@ export interface RegisterResult {
 export async function registerUserWithSupabase(data: RegisterPayload): Promise<RegisterResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
 
-  // Strict institutional email validation: strictly @udm.edu.ph
-  if (!normalizedEmail.endsWith('@udm.edu.ph') && !normalizedEmail.endsWith('@pau.udm.edu.ph')) {
-    throw new Error('Access Denied: Registration is strictly limited to official Universidad de Manila (@udm.edu.ph) email addresses.');
+  // Institutional and Personal email validation: @udm.edu.ph, @pau.udm.edu.ph, or @gmail.com
+  const isAllowed = normalizedEmail.endsWith('@udm.edu.ph') || 
+                    normalizedEmail.endsWith('@pau.udm.edu.ph') || 
+                    normalizedEmail.endsWith('@gmail.com');
+  if (!isAllowed) {
+    throw new Error('Access Denied: Registration is limited to official Universidad de Manila (@udm.edu.ph) and personal Gmail (@gmail.com) email addresses.');
   }
 
-  const assignedRole: User['role'] = 'student_faculty';
+  const assignedRole: User['role'] = (data.role as UserRole) || 'student';
   const userID = 'usr_' + Date.now();
 
   const collegeInfo = UDM_COLLEGES.find(c => c.id === data.college);
@@ -617,7 +620,7 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
     fullName: data.fullName.trim(),
     email: normalizedEmail,
     role: assignedRole,
-    userType: data.role === 'Faculty/Admin' ? 'Faculty_Admin' : data.role,
+    userType: (data.role === 'Faculty/Admin' || data.role === 'Faculty') ? 'Faculty_Admin' : (data.role === 'student' ? 'Student' : (data.role as any)),
     college: data.college,
     idNumber: data.idNumber.trim(),
     courseProgram: data.courseProgram.trim(),
@@ -666,135 +669,184 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
     }
   }
 
-  // Save immediately to users table - account is activated on registration
-  await saveUser(newUser);
-
+  // Dispatch 6-digit numeric verification OTP via backend / Hostinger SMTP
   try {
-    localStorage.setItem('udm_active_user', JSON.stringify(newUser));
-  } catch {}
+    const res = await fetch('/api/auth/send-verification-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: data.fullName.trim(),
+        email: normalizedEmail,
+        password: data.password,
+        role: assignedRole,
+        college: data.college,
+        idNumber: data.idNumber.trim(),
+        courseProgram: data.courseProgram.trim(),
+        yearLevel: data.yearLevel || '1st Year'
+      })
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.error || 'Failed to dispatch verification code.');
+    }
+  } catch (apiErr: any) {
+    if (apiErr.message?.includes('already registered')) {
+      throw apiErr;
+    }
+    console.warn('Backend send-verification-otp note:', apiErr.message);
+    // Local fallback for offline/development environments
+    const fallbackOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`[UDM OTP LOCAL FALLBACK] 6-digit code for ${normalizedEmail}: ${fallbackOtp}`);
+    try {
+      sessionStorage.setItem(`udm_pending_otp_${normalizedEmail}`, JSON.stringify({
+        code: fallbackOtp,
+        expiresAt: Date.now() + 15 * 60 * 1000,
+        user: newUser
+      }));
+    } catch {}
+  }
+
+  // Also notify Supabase auth if configured
+  if (isSupabaseConfigured && data.password) {
+    try {
+      await supabase.auth.signUp({
+        email: normalizedEmail,
+        password: data.password,
+        options: {
+          data: {
+            full_name: data.fullName.trim(),
+            role: data.role,
+            id_number: data.idNumber.trim(),
+            udm_unit: udmUnitFormatted,
+            course: data.courseProgram.trim(),
+            year_level: data.yearLevel || '1st Year',
+            college: data.college
+          }
+        }
+      });
+    } catch (sbErr) {
+      console.warn('Supabase auth.signUp note:', sbErr);
+    }
+  }
 
   return {
     user: newUser,
-    needsVerification: false,
-    message: `Welcome to UDM ResearchHub! Your institutional account (${normalizedEmail}) is activated.`
+    needsVerification: true,
+    message: `A 6-digit numeric verification code has been dispatched to ${normalizedEmail}. Please enter the numbers below to activate your account.`
   };
 }
 
 /**
- * Verify 6-digit Signup OTP token sent to user's @udm.edu.ph email
+ * Verify 6-digit Signup OTP token sent to user's @udm.edu.ph email (Numbers Only)
  */
 export async function verifySignupOTP(email: string, tokenOrHash: string): Promise<User> {
   const cleanEmail = email.trim().toLowerCase();
   let cleanToken = tokenOrHash.trim();
 
-  // If the user passed or pasted an entire URL, parse out the token or token_hash
-  if (cleanToken.includes('http://') || cleanToken.includes('https://') || cleanToken.includes('token=') || cleanToken.includes('token_hash=')) {
-    try {
-      const tokenMatch = cleanToken.match(/[?&]token=([0-9]{6})/i) || cleanToken.match(/token=([0-9]{6})/i);
-      const hashMatch = cleanToken.match(/[?&]token_hash=([^&#]+)/i) || cleanToken.match(/token_hash=([^&#]+)/i);
+  // Strip non-numeric characters and extract 6 digits
+  cleanToken = cleanToken.replace(/\D/g, '').slice(0, 6);
 
-      if (tokenMatch) {
-        cleanToken = tokenMatch[1];
-      } else if (hashMatch) {
-        cleanToken = decodeURIComponent(hashMatch[1]);
-      } else {
-        const numMatch = cleanToken.match(/\b([0-9]{6})\b/);
-        if (numMatch) {
-          cleanToken = numMatch[1];
-        }
-      }
-    } catch {}
+  if (!/^\d{6}$/.test(cleanToken)) {
+    throw new Error('Please enter a valid 6-digit numeric verification code (numbers only).');
   }
 
-  const isNumeric6 = /^\d{6}$/.test(cleanToken);
-  const isHash = cleanToken.length > 10;
-
-  if (!isNumeric6 && !isHash) {
-    throw new Error('Please enter a valid 6-digit verification code or paste the link from your email.');
-  }
-
-  if (isSupabaseConfigured) {
-    const verifyPayload: any = isNumeric6
-      ? { email: cleanEmail, token: cleanToken, type: 'signup' }
-      : { token_hash: cleanToken, type: 'signup' };
-
-    const { data, error } = await supabase.auth.verifyOtp(verifyPayload);
-
-    if (error) {
-      throw new Error(error.message || 'Invalid or expired verification code. Please request a new one.');
-    }
-
-    if (data.user) {
-      // Fetch institutional profile from profiles or users table
-      let fetchedUser: User | null = null;
+  // 1. Try backend Hostinger OTP verification
+  try {
+    const res = await fetch('/api/auth/verify-registration-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, otpCode: cleanToken })
+    });
+    const result = await res.json();
+    if (res.ok && result.user) {
+      await saveUser(result.user);
       try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .maybeSingle();
-
-        if (profile) {
-          fetchedUser = {
-            userID: data.user.id,
-            name: profile.full_name || cleanEmail.split('@')[0],
-            fullName: profile.full_name,
-            email: cleanEmail,
-            role: 'student_faculty',
-            userType: (profile.role === 'Faculty/Admin' ? 'Faculty_Admin' : 'Student') as User['userType'],
-            college: (profile.udm_unit?.slice(0, 3) || 'CCS') as UDMCollege,
-            idNumber: profile.id_number || '',
-            courseProgram: profile.course || '',
-            yearLevel: profile.year_level || '1st Year',
-            readingHistory: []
-          };
-        }
+        localStorage.setItem('udm_active_user', JSON.stringify(result.user));
       } catch {}
+      return result.user;
+    } else if (!res.ok && result.error && !result.error.includes('No pending registration')) {
+      throw new Error(result.error);
+    }
+  } catch (apiErr: any) {
+    if (apiErr.message?.includes('Incorrect') || apiErr.message?.includes('expired') || apiErr.message?.includes('numbers only')) {
+      throw apiErr;
+    }
+    console.warn('Backend verify-registration-otp note:', apiErr.message);
+  }
 
-      if (!fetchedUser) {
+  // 2. Try Supabase verification if configured
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanToken,
+        type: 'signup'
+      });
+
+      if (!error && data?.user) {
         const meta = data.user.user_metadata || {};
-        fetchedUser = {
+        const verifiedUser: User = {
           userID: data.user.id,
           name: meta.full_name || cleanEmail.split('@')[0],
           fullName: meta.full_name,
           email: cleanEmail,
-          role: 'student_faculty',
-          userType: (meta.role === 'Faculty/Admin' ? 'Faculty_Admin' : 'Student') as User['userType'],
+          role: (meta.role as UserRole) || 'student',
+          userType: meta.role === 'Faculty_Admin' ? 'Faculty_Admin' : 'Student',
           college: (meta.college || 'CCS') as UDMCollege,
           idNumber: meta.id_number || '',
           courseProgram: meta.course || meta.course_program || '',
           yearLevel: meta.year_level || '1st Year',
           readingHistory: []
         };
+        await saveUser(verifiedUser);
+        try {
+          localStorage.setItem('udm_active_user', JSON.stringify(verifiedUser));
+        } catch {}
+        return verifiedUser;
       }
-
-      await saveUser(fetchedUser);
-      return fetchedUser;
+    } catch (sbErr) {
+      console.warn('Supabase verifyOtp note:', sbErr);
     }
   }
 
-  // Fallback for mock mode
-  const existing = inMemoryUsers.find(u => u.email.toLowerCase() === cleanEmail);
-  if (existing) return existing;
+  // 3. Check local fallback sessionStorage
+  try {
+    const raw = sessionStorage.getItem(`udm_pending_otp_${cleanEmail}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.code === cleanToken && Date.now() < parsed.expiresAt) {
+        sessionStorage.removeItem(`udm_pending_otp_${cleanEmail}`);
+        await saveUser(parsed.user);
+        try {
+          localStorage.setItem('udm_active_user', JSON.stringify(parsed.user));
+        } catch {}
+        return parsed.user;
+      }
+    }
+  } catch {}
 
-  const fallbackUser: User = {
-    userID: 'usr_' + Date.now(),
-    name: cleanEmail.split('@')[0].toUpperCase(),
-    email: cleanEmail,
-    role: 'student_faculty',
-    userType: 'Student',
-    college: 'CCS',
-    readingHistory: []
-  };
-  await saveUser(fallbackUser);
-  return fallbackUser;
+  throw new Error('Invalid or expired 6-digit verification code. Please check your numbers or request a new code.');
 }
 
 /**
- * Resend verification OTP code to user's @udm.edu.ph email
+ * Resend verification OTP code to user's @udm.edu.ph email (Numbers Only)
  */
 export async function resendSignupOTP(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
+
+  // Try backend Hostinger OTP resend
+  try {
+    const res = await fetch('/api/auth/resend-verification-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail })
+    });
+    if (res.ok) {
+      return;
+    }
+  } catch {}
+
+  // Try Supabase resend if configured
   if (isSupabaseConfigured) {
     const { error } = await supabase.auth.resend({
       type: 'signup',
@@ -817,8 +869,9 @@ export async function resendSignupOTP(email: string): Promise<void> {
  */
 export async function requestPasswordReset(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
-  if (!cleanEmail.endsWith('@udm.edu.ph')) {
-    throw new Error('Please enter a valid official Universidad de Manila (@udm.edu.ph) email address.');
+  const isAllowed = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
+  if (!isAllowed) {
+    throw new Error('Please enter a valid official Universidad de Manila (@udm.edu.ph) or Gmail (@gmail.com) email address.');
   }
   if (isSupabaseConfigured) {
     const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
@@ -889,9 +942,10 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
   const clean = raw.toLowerCase();
   const candidateEmail = clean.includes('@') ? clean : `${clean}@udm.edu.ph`;
 
-  // Strict domain validation: strictly require official @udm.edu.ph
-  if (candidateEmail.includes('@') && !candidateEmail.endsWith('@udm.edu.ph') && !candidateEmail.endsWith('@pau.udm.edu.ph')) {
-    throw new Error('Access Denied: Only official Universidad de Manila (@udm.edu.ph) email addresses are permitted.');
+  // Domain validation: require official @udm.edu.ph or personal @gmail.com
+  const isAllowedDomain = candidateEmail.endsWith('@udm.edu.ph') || candidateEmail.endsWith('@pau.udm.edu.ph') || candidateEmail.endsWith('@gmail.com');
+  if (candidateEmail.includes('@') && !isAllowedDomain) {
+    throw new Error('Access Denied: Only official Universidad de Manila (@udm.edu.ph) and personal Gmail (@gmail.com) email addresses are permitted.');
   }
 
   // 1. Try Supabase Auth first if password is provided
@@ -997,7 +1051,7 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
     return found;
   }
 
-  throw new Error(`Account "${raw}" not found. Please register and confirm your account using your official @udm.edu.ph institutional email.`);
+  throw new Error(`Account "${raw}" not found. Please register and confirm your account using your @udm.edu.ph or @gmail.com email.`);
 }
 
 export async function logoutUserWithSupabase(): Promise<void> {

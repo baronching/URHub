@@ -14,6 +14,7 @@ import { AnalyticsAndReports } from './components/AnalyticsAndReports';
 import { SuperAdminManagement } from './components/SuperAdminManagement';
 import { SDGSection } from './components/SDGSection';
 import { AuthModal } from './components/AuthModal';
+import { LandingLoginPage } from './components/LandingLoginPage';
 import { PrivacyConsentModal } from './components/PrivacyConsentModal';
 import { BookOpen, CheckCircle2, AlertCircle, ShieldCheck, Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
@@ -33,7 +34,15 @@ import {
   logoutUserWithSupabase
 } from './services/supabaseService';
 import { calculateIDF, getResearchTokens, scoreSearchRelevance, generateHybridRecommendations } from './utils/mlEngine';
-import { isUrelia, canSubmitResearch } from './utils/userUtils';
+import {
+  isUrelia,
+  canSubmitResearch,
+  canViewUnpublished,
+  canReviewSubmissions,
+  canViewAnalytics,
+  canManageUsers,
+  getUserRoleDisplayLabel
+} from './utils/userUtils';
 import { INITIAL_USERS, INITIAL_RESEARCH, INITIAL_SUBMISSIONS } from './data/mockDatabase';
 
 export default function App() {
@@ -73,8 +82,16 @@ export default function App() {
     college: 'ALL',
     year: 'ALL',
     keyword: 'ALL',
+    publicationStatus: canViewUnpublished(currentUser) ? 'ALL' : 'published',
     sortBy: 'relevance'
   });
+
+  // Enforce access control: Students can only view Published papers; reset status filter on logout or student login
+  useEffect(() => {
+    if (!canViewUnpublished(currentUser) && filters.publicationStatus !== 'published') {
+      setFilters(prev => ({ ...prev, publicationStatus: 'published' }));
+    }
+  }, [currentUser]);
 
   // 12 researches per page pagination
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -85,10 +102,20 @@ export default function App() {
     setCurrentPage(1);
   }, [filters]);
 
-  // Protect Admin tabs: "Review Queue", "Analytics & Reports", and "User Management" are exclusively for URELIA
+  // Protect role-gated tabs based on 6-role hierarchy:
+  // - Review Queue: Program Chair, Dean, URELIA Personnel, URELIA Director, URELIA Admin
+  // - Analytics & Reports: Dean, URELIA Personnel, URELIA Director, URELIA Admin
+  // - User Management: URELIA Admin
   useEffect(() => {
-    const isUreliaUser = isUrelia(currentUser);
-    if (!isUreliaUser && (activeTab === 'admin_review' || activeTab === 'analytics' || activeTab === 'super_admin')) {
+    const canReview = canReviewSubmissions(currentUser);
+    const canAnalytics = canViewAnalytics(currentUser);
+    const canUsers = canManageUsers(currentUser);
+
+    if (activeTab === 'admin_review' && !canReview) {
+      setActiveTab('archive');
+    } else if (activeTab === 'analytics' && !canAnalytics) {
+      setActiveTab('archive');
+    } else if (activeTab === 'super_admin' && !canUsers) {
       setActiveTab('archive');
     }
   }, [currentUser, activeTab]);
@@ -97,7 +124,7 @@ export default function App() {
   useEffect(() => {
     if (showSubmissionModal && !canSubmitResearch(currentUser)) {
       setShowSubmissionModal(false);
-      triggerToast('Research submission is exclusively authorized for Faculty/Admin and the URELIA Office.', 'error');
+      triggerToast('Research submission is authorized for Program Chairs, Deans, and the URELIA Office.', 'error');
     }
   }, [showSubmissionModal, currentUser]);
 
@@ -315,11 +342,49 @@ export default function App() {
 
   // 2. Client-side Search & TF-IDF Relevance Scoring on live Firestore papers
   useEffect(() => {
-    let list = rawResearchList.filter(r => r.status === 'approved' || !r.status);
+    // Map pending/rejected submissions so unpublished submissions can be viewed/filtered by authorized roles
+    const mappedSubmissions: Research[] = submissionsList
+      .filter(sub => sub.status !== 'approved')
+      .map(sub => ({
+        researchID: sub.researchID || sub.submissionID,
+        title: sub.title,
+        abstract: sub.abstract,
+        authors: sub.authors,
+        keywords: sub.keywords,
+        department: sub.department,
+        course: sub.course,
+        year: sub.year,
+        status: sub.status || 'pending',
+        viewsCount: 0,
+        downloadsCount: 0,
+        submittedBy: sub.submittedBy,
+        dateAdded: sub.dateSubmitted,
+        fullPdfUrl: sub.pdfFileName ? `/uploads/${sub.pdfFileName}` : undefined,
+        authorCategory: sub.authorCategory
+      }));
 
-    // Compute IDF across all approved papers in the corpus for stable weights
-    const approvedCorpusTokens = list.map(getResearchTokens);
-    const idf = calculateIDF(approvedCorpusTokens);
+    const combinedResearches: Research[] = [
+      ...rawResearchList,
+      ...mappedSubmissions.filter(s => !rawResearchList.some(r => r.researchID === s.researchID))
+    ];
+
+    let list = [...combinedResearches];
+
+    // Enforce access control: Students can ONLY view Published papers
+    if (!canViewUnpublished(currentUser)) {
+      list = list.filter(r => r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected'));
+    } else {
+      // Filter by Publication Status for authorized Faculty/Admin/URELIA
+      if (filters.publicationStatus === 'published') {
+        list = list.filter(r => r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected'));
+      } else if (filters.publicationStatus === 'unpublished') {
+        list = list.filter(r => r.status === 'pending' || r.status === 'rejected');
+      }
+    }
+
+    // Compute IDF across current corpus for stable weights
+    const corpusTokens = list.map(getResearchTokens);
+    const idf = calculateIDF(corpusTokens);
 
     // Combine category filters with clean AND logic
     if (filters.college !== 'ALL') {
@@ -367,7 +432,7 @@ export default function App() {
     }
 
     setFilteredResearchList(list);
-  }, [rawResearchList, filters]);
+  }, [rawResearchList, submissionsList, filters, currentUser]);
 
   // Sync target recommendation college with user profile on login
   useEffect(() => {
@@ -654,6 +719,71 @@ export default function App() {
       .map(([keyword]) => keyword)
       .slice(0, 8);
   }, [filteredResearchList]);
+
+  // No guest role: unauthenticated visitors see the pleasant Facebook-style login & research insights landing page
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen text-slate-800 flex flex-col font-sans selection:bg-[#c9a84c] selection:text-[#1a4731] relative overflow-hidden w-full">
+        {/* Toast Notification */}
+        {toastMsg && (
+          <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 duration-300">
+            <div
+              className={`p-4 rounded-xl shadow-xl border flex items-center space-x-3 text-xs font-bold ${
+                toastMsg.type === 'success'
+                  ? 'bg-[#1a4731] border-[#c9a84c] text-white'
+                  : toastMsg.type === 'info'
+                  ? 'bg-[#1a4731] border-[#c9a84c]/80 text-[#c9a84c]'
+                  : 'bg-white border-rose-500 text-rose-800'
+              }`}
+            >
+              {toastMsg.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-[#c9a84c]" />
+              ) : toastMsg.type === 'info' ? (
+                <AlertCircle className="w-5 h-5 text-[#c9a84c]" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-rose-600" />
+              )}
+              <span>{toastMsg.text}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Facebook-style 2-Column Landing Page with Live Institutional Insights */}
+        <LandingLoginPage
+          totalPapers={rawResearchList.length}
+          featuredResearches={rawResearchList.slice(0, 3)}
+          onOpenPrivacyModal={() => setIsReviewingPrivacy(true)}
+          onLoginSuccess={(user) => {
+            setCurrentUser(user);
+            try {
+              localStorage.setItem('udm_active_user', JSON.stringify(user));
+            } catch {}
+            if (isUrelia(user)) {
+              setActiveTab('super_admin');
+            } else {
+              setActiveTab('archive');
+            }
+            triggerToast(`Welcome back, ${user.name}! Signed in as ${getUserRoleDisplayLabel(user)}.`);
+          }}
+        />
+
+        {/* Republic Act 10173 & Cookie Compliance Modal */}
+        <PrivacyConsentModal
+          isOpen={showPrivacyModal || isReviewingPrivacy}
+          isReviewMode={isReviewingPrivacy}
+          onAccept={(_prefs) => {
+            setShowPrivacyModal(false);
+            setIsReviewingPrivacy(false);
+            triggerToast('Data privacy and compliance preferences recorded.', 'success');
+          }}
+          onDecline={() => {
+            triggerToast('Compliance with RA 10173 & UDM Policy is required to access records.', 'error');
+          }}
+          onCloseReview={() => setIsReviewingPrivacy(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen text-slate-800 flex flex-col font-sans selection:bg-[#c9a84c] selection:text-[#1a4731] relative overflow-x-hidden w-full max-w-full">

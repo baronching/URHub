@@ -136,11 +136,14 @@ export const SuperAdminManagement: React.FC = () => {
                     <select
                       value={u.role}
                       onChange={e => handleRoleUpdate(u.userID, e.target.value as UserRole)}
-                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer font-medium"
+                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer font-medium text-xs"
                     >
-                      <option value="student_faculty">Student</option>
-                      <option value="admin">Faculty/Admin</option>
-                      <option value="super_admin">URELIA</option>
+                      <option value="student">Student</option>
+                      <option value="program_chair">Program Chair</option>
+                      <option value="dean">College Dean</option>
+                      <option value="urelia_personnel">URELIA / Research Personnel</option>
+                      <option value="urelia_director">URELIA Director</option>
+                      <option value="urelia_admin">URELIA Admin</option>
                     </select>
                   </td>
                 </tr>
