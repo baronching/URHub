@@ -127,11 +127,11 @@ export const Header: React.FC<HeaderProps> = ({
                   UDM-ResearchHub
                 </h1>
                 <span className="hidden xl:inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#c9a84c] text-[#1a4731] shrink-0">
-                  AI ML
+                  URELIA
                 </span>
               </div>
               <p className="text-[10px] text-white/80 hidden 2xl:block truncate">
-                Machine Learning Research Repository • UDM
+                Institutional Research Repository • UDM
               </p>
             </div>
           </div>
@@ -159,7 +159,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              <span>AI Recommendations</span>
+              <span>Recommendations</span>
             </button>
 
             {/* Faculty/Admin & URELIA Submit button */}
@@ -324,7 +324,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
               >
                 <Sparkles className="w-4 h-4" />
-                <span>AI Recommendations</span>
+                <span>Recommendations</span>
               </button>
 
               {userCanSubmit && (

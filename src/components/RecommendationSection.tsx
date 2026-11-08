@@ -26,17 +26,17 @@ export const RecommendationSection: React.FC<RecommendationSectionProps> = ({
           <BrainCircuit className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-[#1a4731]">
-          Personalized AI Machine Learning Recommendations
+          Institutional Research Recommendations
         </h2>
         <p className="text-sm text-slate-600 leading-relaxed">
-          Log in with your official UDM email address (@udm.edu.ph) to access personalized research recommendations powered by TF-IDF Cosine Similarity (Content-Based) and User Interaction Matrix (Collaborative Filtering).
+          Sign in with your registered account to access personalized research recommendations indexed via TF-IDF similarity and institutional engagement patterns.
         </p>
         <button
           onClick={onOpenAuth}
           className="px-6 py-3 rounded-lg bg-[#1a4731] hover:bg-[#123323] text-white font-bold text-xs shadow-sm inline-flex items-center space-x-2"
         >
           <Sparkles className="w-4 h-4 text-[#c9a84c]" />
-          <span>Login with UDM Account</span>
+          <span>Sign In to View Recommendations</span>
         </button>
       </div>
     );
@@ -52,11 +52,11 @@ export const RecommendationSection: React.FC<RecommendationSectionProps> = ({
               <BrainCircuit className="w-5 h-5" />
             </span>
             <h2 className="text-lg font-bold text-[#1a4731]">
-              AI Recommendations for {currentUser.name}
+              Recommended Studies for {currentUser.name}
             </h2>
           </div>
           <p className="text-xs text-slate-600">
-            Engineered using <strong>TF-IDF Vector Space</strong> (Content-Based 60%) & <strong>User-Item Interaction Matrix</strong> (Collaborative Filtering 40%)
+            Curated using <strong>TF-IDF Vector Matching</strong> (Content-Based 60%) & <strong>Academic Interaction Indexing</strong> (Collaborative Filtering 40%)
           </p>
         </div>
 

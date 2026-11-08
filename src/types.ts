@@ -102,9 +102,47 @@ export interface User {
 }
 
 export type ResearchStatus = 'pending' | 'approved' | 'rejected';
+export type PublicationType = 'unpublished' | 'published';
+export type WorkflowStatus =
+  | 'pending_dean'
+  | 'endorsed_to_urelia'
+  | 'pending_urelia'
+  | 'approved'
+  | 'rejected'
+  | 'revision_requested';
+
+export interface PublicationProof {
+  externalUrl?: string;
+  publicationDate?: string;
+  presentationDate?: string;
+  publisherName?: string;
+  journalOrConference?: string;
+  proofDocumentUrl?: string;
+}
+
+export interface VersionAuditEntry {
+  version: string;
+  documentNumber: string;
+  date: string;
+  actionBy: string;
+  actionRole: string;
+  action: string;
+  notes?: string;
+}
+
+export interface TitleIntegrityCheck {
+  encodedTitle: string;
+  extractedTitle?: string;
+  matchScore: number;
+  isMatch: boolean;
+  flaggedMismatch: boolean;
+  notes?: string;
+}
 
 export interface Research {
   researchID: string;
+  documentNumber?: string;
+  version?: string;
   title: string;
   abstract: string;
   authors: string[];
@@ -113,6 +151,8 @@ export interface Research {
   course: string;
   year: number;
   status: ResearchStatus;
+  publicationType?: PublicationType;
+  publicationProof?: PublicationProof;
   fullPdfUrl?: string;
   viewsCount: number;
   downloadsCount: number;
@@ -121,10 +161,13 @@ export interface Research {
   relevanceScore?: number;
   authorCategory?: AuthorCategory;
   adviser?: string;
+  versionHistory?: VersionAuditEntry[];
 }
 
 export interface Submission {
   submissionID: string;
+  documentNumber?: string;
+  version?: string;
   submittedBy: string;
   submitterName: string;
   submitterEmail: string;
@@ -138,6 +181,17 @@ export interface Submission {
   year: number;
   dateSubmitted: string;
   status: ResearchStatus;
+  publicationType?: PublicationType;
+  workflowStatus?: WorkflowStatus;
+  publicationProof?: PublicationProof;
+  titleIntegrity?: TitleIntegrityCheck;
+  versionHistory?: VersionAuditEntry[];
+  deanComments?: string;
+  deanEndorsedBy?: string;
+  deanEndorsedDate?: string;
+  ureliaReviewedBy?: string;
+  ureliaReviewedDate?: string;
+  ureliaDecisionNote?: string;
   reviewNote?: string;
   pdfFileName?: string;
   authorCategory?: AuthorCategory;

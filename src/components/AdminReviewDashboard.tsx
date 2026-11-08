@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Submission, UDM_COLLEGES } from '../types';
+﻿import React, { useState } from 'react';
+import { Submission, User, UDM_COLLEGES } from '../types';
+import { isDean, isProgramChair, isUrelia, isUreliaDirector, isUreliaAdmin } from '../utils/userUtils';
 import {
   CheckSquare,
   CheckCircle2,
@@ -9,35 +10,92 @@ import {
   FileText,
   User as UserIcon,
   ShieldCheck,
+  ShieldAlert,
   ExternalLink,
   Download,
-  X
+  X,
+  Send,
+  Award,
+  Globe,
+  Calendar,
+  Building2,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 interface AdminReviewDashboardProps {
+  currentUser: User | null;
   submissions: Submission[];
   accessRequests?: any[];
   onReviewSubmission: (submissionID: string, status: 'approved' | 'rejected', reviewNote: string) => Promise<void>;
+  onEndorseSubmission?: (submissionID: string, comments: string) => Promise<void>;
+  onRequestRevision?: (submissionID: string, reason: string) => Promise<void>;
   onReviewAccessRequest?: (requestID: string, status: 'approved' | 'rejected', reviewNote: string) => Promise<void>;
 }
 
 export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
+  currentUser,
   submissions,
-  onReviewSubmission
+  onReviewSubmission,
+  onEndorseSubmission,
+  onRequestRevision
 }) => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
-  
-  // Selection for Submissions evaluation modal
-  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const isDeanUser = isDean(currentUser);
+  const isChairUser = isProgramChair(currentUser);
+  const isUreliaUser = isUrelia(currentUser);
 
+  // Submissions filtered by role authority scope:
+  // - Dean: strictly their designated college
+  // - Program Chair: their designated college / submissions
+  // - URELIA: university-wide (all colleges)
+  const scopedSubmissions = submissions.filter(s => {
+    if (isDeanUser) {
+      return s.department === currentUser?.college;
+    }
+    if (isChairUser) {
+      return s.department === currentUser?.college || s.submittedBy === currentUser?.userID;
+    }
+    return true; // URELIA sees all
+  });
+
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected' | 'endorsed'>('pending');
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [reviewNote, setReviewNote] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const [overrideTitleMismatch, setOverrideTitleMismatch] = useState(false);
 
-  const filteredSubmissions = submissions.filter(s => s.status === activeTab);
-  const pendingSubmissionsCount = submissions.filter(s => s.status === 'pending').length;
+  // Filter based on active tab
+  const filteredSubmissions = scopedSubmissions.filter(s => {
+    if (activeTab === 'pending') {
+      if (isDeanUser) {
+        // Dean sees unpublished papers waiting for dean review
+        return s.status === 'pending' && (!s.workflowStatus || s.workflowStatus === 'pending_dean');
+      }
+      if (isUreliaUser) {
+        // URELIA sees items endorsed by dean or direct published submissions
+        return s.status === 'pending' && (s.workflowStatus === 'endorsed_to_urelia' || s.workflowStatus === 'pending_urelia' || !s.workflowStatus);
+      }
+      return s.status === 'pending';
+    }
+    if (activeTab === 'endorsed') {
+      return s.workflowStatus === 'endorsed_to_urelia' && s.status === 'pending';
+    }
+    if (activeTab === 'approved') {
+      return s.status === 'approved';
+    }
+    if (activeTab === 'rejected') {
+      return s.status === 'rejected' || s.workflowStatus === 'revision_requested';
+    }
+    return true;
+  });
+
+  const pendingCount = scopedSubmissions.filter(s => {
+    if (isDeanUser) return s.status === 'pending' && (!s.workflowStatus || s.workflowStatus === 'pending_dean');
+    if (isUreliaUser) return s.status === 'pending' && (s.workflowStatus === 'endorsed_to_urelia' || s.workflowStatus === 'pending_urelia' || !s.workflowStatus);
+    return s.status === 'pending';
+  }).length;
 
   const escapeHtml = (text: string) => {
     return (text || '')
@@ -48,6 +106,7 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
       .replace(/'/g, '&#039;');
   };
 
+  // Full Paper Viewer Simulation in New Tab
   const handleViewFullDocumentInNewTab = (sub: Submission) => {
     const collegeInfo = UDM_COLLEGES.find(c => c.id === sub.department);
     const collegeName = collegeInfo?.name || `College of ${sub.department}`;
@@ -59,527 +118,149 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(sub.submissionID)} - Institutional Evaluation Manuscript</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <title>${escapeHtml(sub.submissionID)} - Institutional Manuscript Evaluation</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #f8fafc;
-      color: #1e293b;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-    }
-    .top-bar {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: #1a4731;
-      color: white;
-      padding: 12px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .top-bar .title-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .top-bar .logo-badge {
-      background: #c9a84c;
-      color: #1a4731;
-      font-weight: 800;
-      font-size: 11px;
-      padding: 4px 8px;
-      border-radius: 6px;
-      letter-spacing: 0.5px;
-    }
-    .top-bar h1 {
-      font-size: 14px;
-      font-weight: 700;
-    }
-    .top-bar .btn-group {
-      display: flex;
-      gap: 10px;
-    }
-    .btn {
-      padding: 7px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s;
-    }
-    .btn-print {
-      background: #c9a84c;
-      color: #1a4731;
-    }
-    .btn-print:hover { background: #b8973d; }
-    .btn-close {
-      background: rgba(255,255,255,0.15);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.25);
-    }
-    .btn-close:hover { background: rgba(255,255,255,0.25); }
-    .doc-container {
-      max-width: 860px;
-      margin: 32px auto 64px auto;
-      background: white;
-      padding: 64px 72px;
-      border-radius: 12px;
-      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06), 0 8px 10px -6px rgba(0,0,0,0.04);
-      border: 1px solid #e2e8f0;
-      position: relative;
-    }
-    .watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-35deg);
-      font-size: 58px;
-      font-weight: 900;
-      color: rgba(26, 71, 49, 0.04);
-      text-transform: uppercase;
-      letter-spacing: 6px;
-      pointer-events: none;
-      z-index: 10;
-      white-space: nowrap;
-    }
-    .header-seal {
-      text-align: center;
-      border-bottom: 2px solid #1a4731;
-      padding-bottom: 20px;
-      margin-bottom: 32px;
-    }
-    .univ-title {
-      font-size: 20px;
-      font-weight: 800;
-      color: #1a4731;
-      letter-spacing: 1px;
-    }
-    .office-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: #c9a84c;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-    .doc-id-pill {
-      display: inline-block;
-      margin-top: 10px;
-      background: #f1f5f9;
-      color: #475569;
-      font-family: monospace;
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 12px;
-      border: 1px solid #cbd5e1;
-    }
-    .paper-title {
-      font-family: 'Merriweather', serif;
-      font-size: 22px;
-      font-weight: 700;
-      color: #0f172a;
-      line-height: 1.4;
-      margin-bottom: 24px;
-      text-align: center;
-    }
-    .meta-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px 20px;
-      background: #f8fafc;
-      padding: 16px 20px;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-      font-size: 12px;
-      margin-bottom: 36px;
-    }
-    .meta-item strong {
-      color: #1a4731;
-      display: inline-block;
-      min-width: 90px;
-    }
-    .section {
-      margin-bottom: 36px;
-    }
-    .section-title {
-      font-size: 15px;
-      font-weight: 800;
-      color: #1a4731;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-left: 4px solid #c9a84c;
-      padding-left: 10px;
-      margin-bottom: 12px;
-    }
-    .abstract-box {
-      font-family: 'Merriweather', serif;
-      font-size: 14px;
-      line-height: 1.7;
-      color: #334155;
-      text-align: justify;
-      background: #fafaf9;
-      padding: 20px 24px;
-      border-radius: 8px;
-      border-left: 3px solid #1a4731;
-    }
-    .keywords-line {
-      margin-top: 12px;
-      font-size: 12px;
-      font-style: italic;
-      color: #64748b;
-    }
-    .keywords-line strong {
-      color: #1a4731;
-      font-style: normal;
-    }
-    .body-p {
-      font-size: 13px;
-      line-height: 1.7;
-      color: #334155;
-      margin-bottom: 12px;
-      text-align: justify;
-    }
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 16px 0;
-      font-size: 11px;
-    }
-    .data-table th {
-      background: #1a4731;
-      color: white;
-      padding: 8px 12px;
-      text-align: left;
-      font-weight: 600;
-    }
-    .data-table td {
-      padding: 8px 12px;
-      border-bottom: 1px solid #e2e8f0;
-      color: #334155;
-    }
-    .data-table tr:nth-child(even) { background: #f8fafc; }
-    .rubric-box {
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 8px;
-      padding: 20px;
-      margin-top: 32px;
-    }
-    .rubric-box h4 {
-      color: #1a4731;
-      font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 10px;
-    }
-    .rubric-list {
-      list-style: none;
-      font-size: 12px;
-      color: #166534;
-      display: grid;
-      gap: 6px;
-    }
-    .rubric-list li::before {
-      content: "✓ ";
-      font-weight: bold;
-      color: #c9a84c;
-    }
-    .sign-row {
-      margin-top: 48px;
-      display: flex;
-      justify-content: space-between;
-      text-align: center;
-      font-size: 12px;
-    }
-    .sign-box {
-      width: 200px;
-      border-top: 1px solid #94a3b8;
-      padding-top: 6px;
-      color: #475569;
-    }
-    @media print {
-      body { background: white; }
-      .top-bar { display: none; }
-      .doc-container {
-        box-shadow: none;
-        border: none;
-        padding: 0;
-        margin: 0;
-        max-width: 100%;
-      }
-      .watermark { display: none; }
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #1e293b; padding: 40px; margin: 0; line-height: 1.6; }
+    .container { max-width: 840px; margin: 0 auto; background: white; padding: 60px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .header { text-align: center; border-bottom: 3px solid #1a4731; padding-bottom: 24px; margin-bottom: 32px; }
+    .title { font-size: 22px; font-weight: 800; color: #1a4731; margin-bottom: 8px; }
+    .meta { font-size: 13px; color: #64748b; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; background: #e0f2fe; color: #0369a1; text-transform: uppercase; margin-bottom: 12px; }
+    .h3 { font-size: 15px; font-weight: 700; color: #1a4731; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-top: 24px; }
+    p { font-size: 13px; color: #334155; line-height: 1.7; }
   </style>
 </head>
 <body>
-  <div class="watermark">URELIA EVALUATION</div>
-  <div class="top-bar">
-    <div class="title-group">
-      <span class="logo-badge">UDM • URELIA</span>
-      <h1>${escapeHtml(sub.submissionID)} — Manuscript Evaluation Reader</h1>
+  <div class="container">
+    <div class="header">
+      <div class="badge">${escapeHtml(sub.documentNumber || sub.submissionID)} • ${escapeHtml(sub.version || 'v1.0')}</div>
+      <div class="title">${escapeHtml(sub.title)}</div>
+      <div class="meta">${escapeHtml(authorsStr)} &bull; ${escapeHtml(collegeName)} &bull; ${year}</div>
+      <div class="meta" style="margin-top: 4px; font-style: italic;">Classification: ${sub.publicationType === 'unpublished' ? 'Unpublished (Thesis / Capstone)' : 'Published External Study'}</div>
     </div>
-    <div class="btn-group">
-      <button class="btn btn-print" onclick="window.print()">Print / Save PDF</button>
-      <button class="btn btn-close" onclick="window.close()">✕ Close Reader</button>
-    </div>
-  </div>
-
-  <div class="doc-container">
-    <div class="header-seal">
-      <div class="univ-title">UNIVERSIDAD DE MANILA</div>
-      <div class="office-title">URELIA Research & Extension Office • Institutional Evaluation Copy</div>
-      <div class="doc-id-pill">Official Submission ID: ${escapeHtml(sub.submissionID)} | File: ${escapeHtml(fileName)}</div>
-    </div>
-
-    <h2 class="paper-title">${escapeHtml(sub.title)}</h2>
-
-    <div class="meta-grid">
-      <div class="meta-item"><strong>College:</strong> ${escapeHtml(sub.department)} — ${escapeHtml(collegeName)}</div>
-      <div class="meta-item"><strong>Academic Course:</strong> ${escapeHtml(sub.course)}</div>
-      <div class="meta-item"><strong>Authors:</strong> ${escapeHtml(authorsStr)}</div>
-      <div class="meta-item"><strong>Academic Year:</strong> ${escapeHtml(String(year))}</div>
-      <div class="meta-item"><strong>Submitter:</strong> ${escapeHtml(sub.submitterName)} (${escapeHtml(sub.submitterEmail)})</div>
-      <div class="meta-item"><strong>Date Submitted:</strong> ${escapeHtml(sub.dateSubmitted || 'N/A')}</div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Executive Abstract</div>
-      <div class="abstract-box">
-        ${escapeHtml(sub.abstract)}
-      </div>
-      ${sub.keywords && sub.keywords.length > 0 ? `
-      <div class="keywords-line">
-        <strong>Keywords:</strong> ${escapeHtml(sub.keywords.join(', '))}
-      </div>` : ''}
-    </div>
-
-    <div class="section">
-      <div class="section-title">Chapter 1: The Problem and Its Background</div>
-      <p class="body-p">In contemporary higher education and institutional governance across the City of Manila, the systematic pursuit of evidence-based solutions has become a fundamental imperative. As urban academic institutions navigate complex socio-economic transformations, empirical investigation provides the indispensable foundation for sustainable community development.</p>
-      <p class="body-p">This study investigates key operational variables affecting ${escapeHtml(collegeName)} and its constituent stakeholders. At Universidad de Manila (UDM), academic programs continuously seek to bridge theoretical paradigms with localized, real-world applications in alignment with the university's institutional mission of accessible, high-quality public tertiary education.</p>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Chapter 2: Review of Related Literature & Theoretical Framework</div>
-      <p class="body-p">A comprehensive synthesis of related literature reveals growing scholarly attention toward systemic evaluation in ${escapeHtml(sub.course)}. Both international benchmarks and local Philippine directives from CHED emphasize the critical role of data-driven methodologies in modern institutional environments.</p>
-      <p class="body-p">Prior research conducted at Universidad de Manila identified recurring gaps in localized data synthesis. This investigation directly addresses the empirical gap through structured Input-Process-Output (IPO) modeling and rigorous hypothesis testing.</p>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Chapter 3: Methodology & Research Design</div>
-      <p class="body-p">The investigation utilizes a validated descriptive-correlational and quantitative assessment design. Data gathering utilized stratified purposive sampling across student cohorts, faculty educators, and institutional personnel with a validated Cronbach alpha internal reliability of 0.89.</p>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Chapter 4: Empirical Findings & Statistical Analysis</div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Evaluated Domain Indicator</th>
-            <th>Weighted Mean</th>
-            <th>Std. Dev (SD)</th>
-            <th>Computed t-value</th>
-            <th>p-value</th>
-            <th>Decision on H₀</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Operational Relevance to UDM Curriculum</td>
-            <td>4.68 (Very High)</td>
-            <td>0.42</td>
-            <td>5.12</td>
-            <td>&lt; 0.001</td>
-            <td>Reject Null Hypothesis</td>
-          </tr>
-          <tr>
-            <td>Community & Municipal Impact (City of Manila)</td>
-            <td>4.52 (High)</td>
-            <td>0.48</td>
-            <td>4.38</td>
-            <td>&lt; 0.001</td>
-            <td>Reject Null Hypothesis</td>
-          </tr>
-          <tr>
-            <td>Methodological Rigor & Instrument Reliability</td>
-            <td>4.61 (Very High)</td>
-            <td>0.39</td>
-            <td>4.95</td>
-            <td>&lt; 0.001</td>
-            <td>Reject Null Hypothesis</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Chapter 5: Summary, Conclusions & Recommendations</div>
-      <p class="body-p">Based on the empirical evidence gathered, the proposed framework demonstrates statistically significant improvements in process consistency, stakeholder engagement, and archival utility. It is strongly recommended that the findings be integrated into the college curriculum and preserved in the official UDM URELIA research repository.</p>
-    </div>
-
-    <div class="rubric-box">
-      <h4>URELIA Institutional Evaluation Quality Rubric</h4>
-      <ul class="rubric-list">
-        <li>Alignment with Universidad de Manila Strategic Research Agenda verified.</li>
-        <li>Methodological validity, sampling distribution, and statistical metrics evaluated.</li>
-        <li>Academic ethics, copyright compliance, and zero plagiarism verified.</li>
-        <li>Format conforms to UDM institutional manuscript archiving specifications.</li>
-      </ul>
-    </div>
-
-    <div class="sign-row">
-      <div class="sign-box">Evaluating Reviewer (URELIA)</div>
-      <div class="sign-box">Dean / Department Chair</div>
-      <div class="sign-box">University Research Director</div>
-    </div>
+    <div class="h3">ABSTRACT</div>
+    <p>${escapeHtml(sub.abstract)}</p>
+    <div class="h3">KEYWORDS</div>
+    <p>${escapeHtml(sub.keywords ? sub.keywords.join(', ') : 'Academic Research, UDM')}</p>
+    <div class="h3">INSTITUTIONAL METADATA & SUBMISSION PROOF</div>
+    <p><strong>Submitter:</strong> ${escapeHtml(sub.submitterName)} (${escapeHtml(sub.submitterEmail)})</p>
+    <p><strong>File Name:</strong> ${escapeHtml(fileName)}</p>
+    ${sub.publicationProof?.externalUrl ? `<p><strong>Publication Evidence URL:</strong> <a href="${escapeHtml(sub.publicationProof.externalUrl)}" target="_blank">${escapeHtml(sub.publicationProof.externalUrl)}</a></p>` : ''}
+    ${sub.publicationProof?.publisherName ? `<p><strong>Publisher / Conference:</strong> ${escapeHtml(sub.publicationProof.publisherName)}</p>` : ''}
   </div>
 </body>
 </html>`;
 
-    const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      newWindow.document.write(htmlContent);
-      newWindow.document.close();
-    } else {
-      alert('Pop-up was blocked. Please allow pop-ups for this site to view the manuscript in a new tab.');
-    }
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
   };
 
+  // Download Evaluation PDF
   const handleDownloadPdf = (sub: Submission) => {
     setIsDownloadingPdf(true);
     try {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const collegeInfo = UDM_COLLEGES.find(c => c.id === sub.department);
-      const collegeName = collegeInfo?.name || `College of ${sub.department}`;
-
-      // Header Banner
-      doc.setFillColor(26, 71, 49); // #1a4731 Forest Green
-      doc.rect(0, 0, 210, 26, 'F');
-
-      // University Header
-      doc.setTextColor(201, 168, 76); // #c9a84c Gold
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text('UNIVERSIDAD DE MANILA', 15, 11);
-
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      doc.setFillColor(26, 71, 49);
+      doc.rect(0, 0, 210, 22, 'F');
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text('URELIA Office - Official Institutional Research Manuscript', 15, 17);
-
-      doc.setFontSize(8);
-      doc.setTextColor(203, 213, 225);
-      doc.text(`Submission ID: ${sub.submissionID} | Date: ${sub.dateSubmitted || new Date().toLocaleDateString()}`, 15, 22);
-
-      let y = 35;
-
-      // Paper Title
-      doc.setTextColor(26, 71, 49);
-      doc.setFontSize(13);
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      const splitTitle = doc.splitTextToSize(sub.title, 180);
-      doc.text(splitTitle, 15, y);
-      y += (splitTitle.length * 6.5) + 3;
-
-      // Metadata Info
+      doc.text('UNIVERSIDAD DE MANILA • URELIA OFFICE', 105, 12, { align: 'center' });
       doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(51, 65, 85);
-      doc.text(`College: ${sub.department} - ${collegeName}`, 15, y);
-      y += 5;
-      doc.text(`Course: ${sub.course} | Academic Year: ${sub.year || 2026}`, 15, y);
-      y += 5;
-      doc.setFont('helvetica', 'normal');
-      const authorsStr = sub.authors && sub.authors.length > 0 ? sub.authors.join(', ') : sub.submitterName;
-      doc.text(`Authors: ${authorsStr}`, 15, y);
-      y += 5;
-      doc.text(`Submitter: ${sub.submitterName} (${sub.submitterEmail})`, 15, y);
-      y += 8;
+      doc.text('Official Institutional Research Manuscript Evaluation Copy', 105, 18, { align: 'center' });
 
-      // Divider Line
-      doc.setDrawColor(203, 213, 225);
-      doc.line(15, y, 195, y);
-      y += 8;
-
-      // Abstract Section
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(26, 71, 49);
-      doc.text('EXECUTIVE ABSTRACT', 15, y);
-      y += 6;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
-      const splitAbstract = doc.splitTextToSize(sub.abstract, 180);
-      doc.text(splitAbstract, 15, y);
-      y += (splitAbstract.length * 4.8) + 6;
+      doc.setFontSize(13);
+      doc.text(doc.splitTextToSize(sub.title, 170), 20, 36);
 
-      // Keywords
-      if (sub.keywords && sub.keywords.length > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.text('Keywords: ', 15, y);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(71, 85, 105);
-        doc.text(sub.keywords.join(', '), 35, y);
-        y += 10;
-      }
-
-      // Rubrics Box
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(15, y, 180, 52, 2, 2, 'FD');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Document: ${sub.documentNumber || sub.submissionID} • Version: ${sub.version || 'v1.0'}`, 20, 52);
+      doc.text(`Submitter: ${sub.submitterName} (${sub.department}) • Date: ${sub.dateSubmitted}`, 20, 58);
 
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
       doc.setTextColor(26, 71, 49);
-      doc.text('URELIA RESEARCH EVALUATION CRITERIA', 20, y + 8);
-
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(71, 85, 105);
-      doc.text('1. Institutional Alignment: Addresses UDM research agenda and Manila development goals.', 20, y + 16);
-      doc.text('2. Methodological Rigor: Quantitative / qualitative framework validated by thesis adviser.', 20, y + 24);
-      doc.text('3. Academic Integrity: Manuscript verified for originality, absence of plagiarism, and ethical clearance.', 20, y + 32);
-      doc.text('4. Archival Readiness: Manuscript format follows URELIA thesis submission guidelines.', 20, y + 40);
-
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(180, 83, 9);
-      doc.text('STATUS: Pending Official Administrator Evaluation & Archival Decision', 20, y + 47);
+      doc.text('ABSTRACT', 20, 70);
 
-      // Save document
-      doc.save(`${sub.submissionID}_Manuscript.pdf`);
-      setActionSuccessMsg(`Downloaded ${sub.submissionID}_Manuscript.pdf`);
-      setTimeout(() => setActionSuccessMsg(null), 3500);
-    } catch (err) {
-      console.error('Failed to generate PDF:', err);
+      doc.setFontSize(9);
+      doc.setTextColor(51, 65, 85);
+      doc.setFont('helvetica', 'normal');
+      const abstractLines = doc.splitTextToSize(sub.abstract, 170);
+      doc.text(abstractLines, 20, 76);
+
+      doc.save(`${sub.documentNumber || sub.submissionID}_Evaluation.pdf`);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsDownloadingPdf(false);
     }
   };
 
-  const handleSubmissionAction = async (status: 'approved' | 'rejected') => {
+  // Dean Endorsement Action
+  const handleDeanEndorse = async () => {
+    if (!selectedSubmission || !onEndorseSubmission) return;
+    setIsProcessing(true);
+    try {
+      await onEndorseSubmission(selectedSubmission.submissionID, reviewNote);
+      setSelectedSubmission(null);
+      setReviewNote('');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Revision Request Action
+  const handleRequestRevisionAction = async () => {
+    if (!selectedSubmission || !onRequestRevision) return;
+    if (!reviewNote.trim()) {
+      alert('Please specify the revision reason or comments for the submitter.');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await onRequestRevision(
+        selectedSubmission.submissionID,
+        reviewNote
+      );
+      setSelectedSubmission(null);
+      setReviewNote('');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // URELIA Final Approval
+  const handleFinalApproval = async () => {
+    if (!selectedSubmission) return;
+
+    // Title Integrity Restriction: Restrict approval if title does not match metadata
+    const isMismatch = selectedSubmission.titleIntegrity?.flaggedMismatch;
+    if (isMismatch && !overrideTitleMismatch) {
+      alert('Approval Restricted: The encoded title does not match the actual title in the full paper file. You must reject this submission or verify title reconciliation before approving.');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await onReviewSubmission(selectedSubmission.submissionID, 'approved', reviewNote);
+      setSelectedSubmission(null);
+      setReviewNote('');
+      setOverrideTitleMismatch(false);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Rejection Action
+  const handleReject = async () => {
     if (!selectedSubmission) return;
     setIsProcessing(true);
     try {
-      await onReviewSubmission(selectedSubmission.submissionID, status, reviewNote);
+      await onReviewSubmission(selectedSubmission.submissionID, 'rejected', reviewNote || 'Rejected due to title discrepancy or non-compliance.');
       setSelectedSubmission(null);
       setReviewNote('');
-    } catch (err) {
-      console.error(err);
     } finally {
       setIsProcessing(false);
     }
@@ -587,158 +268,240 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Banner & Paper Submissions Queue Info */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+      
+      {/* Top Scope Header Banner */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="p-1.5 rounded-lg bg-[#1a4731]/10 text-[#1a4731] border border-[#1a4731]/20">
-                <ShieldCheck className="w-5 h-5 text-[#1a4731]" />
+            <div className="flex items-center space-x-2.5">
+              <span className="p-2 rounded-xl bg-[#1a4731] text-white">
+                <ShieldCheck className="w-5 h-5 text-[#c9a84c]" />
               </span>
-              <h2 className="text-xl font-bold text-[#1a4731]">
-                URELIA Research Admin Management Center
-              </h2>
+              <div>
+                <h2 className="text-lg font-bold text-[#1a4731]">
+                  {isDeanUser
+                    ? `College Dean Evaluation Portal (${currentUser?.college})`
+                    : isChairUser
+                    ? `Program Chair Submissions & Routing Portal`
+                    : `URELIA Research Archival & Final Approval Center`}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {isDeanUser
+                    ? 'Review college thesis submissions, provide academic feedback, and endorse to URELIA Office.'
+                    : isChairUser
+                    ? 'Track department paper submissions, Dean evaluations, and URELIA publishing status.'
+                    : 'University-wide manuscript verification, title integrity audits, and final archival authorization.'}
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-slate-600 mt-1">
-              Evaluate and review institutional paper submissions for the UDM research archive.
-            </p>
           </div>
 
-          {/* Submissions Badge */}
-          <div className="flex items-center bg-slate-100 px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold shrink-0 space-x-2 text-[#1a4731]">
+          {/* Pending Queue Count Pill */}
+          <div className="flex items-center bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold shrink-0 space-x-2 text-[#1a4731]">
             <CheckSquare className="w-4 h-4 text-[#c9a84c]" />
-            <span>Paper Submissions Queue</span>
-            {pendingSubmissionsCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-400 text-slate-900 font-extrabold ml-1">
-                {pendingSubmissionsCount} Pending
-              </span>
-            )}
+            <span>Action Queue:</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-400 text-slate-900 font-extrabold ml-1">
+              {pendingCount} Awaiting Action
+            </span>
           </div>
         </div>
 
-        {/* Status Sub-Tab triggers */}
-        <div className="flex bg-slate-50 p-1 rounded-lg border border-slate-200 text-xs font-bold w-fit">
+        {/* Filter Navigation Tabs */}
+        <div className="flex flex-wrap bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold gap-1 w-fit">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-1.5 rounded-md transition-all flex items-center space-x-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
               activeTab === 'pending'
                 ? 'bg-[#1a4731] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Clock className="w-3.5 h-3.5 text-[#c9a84c]" />
-            <span>
-              Pending ({submissions.filter(s => s.status === 'pending').length})
-            </span>
+            <span>Pending ({pendingCount})</span>
           </button>
+
+          {(isDeanUser || isChairUser) && (
+            <button
+              onClick={() => setActiveTab('endorsed')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
+                activeTab === 'endorsed'
+                  ? 'bg-[#1a4731] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5 text-[#c9a84c]" />
+              <span>Endorsed to URELIA</span>
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('approved')}
-            className={`px-4 py-1.5 rounded-md transition-all flex items-center space-x-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
               activeTab === 'approved'
                 ? 'bg-[#1a4731] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5 text-[#c9a84c]" />
-            <span>
-              Approved ({submissions.filter(s => s.status === 'approved').length})
-            </span>
+            <span>Approved & Archived</span>
           </button>
 
           <button
             onClick={() => setActiveTab('rejected')}
-            className={`px-4 py-1.5 rounded-md transition-all flex items-center space-x-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
               activeTab === 'rejected'
                 ? 'bg-[#1a4731] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <XCircle className="w-3.5 h-3.5 text-[#c9a84c]" />
-            <span>
-              Rejected ({submissions.filter(s => s.status === 'rejected').length})
-            </span>
+            <span>Revisions / Rejected</span>
           </button>
         </div>
       </div>
 
-      {/* PAPER SUBMISSIONS QUEUE */}
+      {/* Submissions List */}
       {filteredSubmissions.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-xl border border-slate-200 shadow-sm text-slate-500">
-          No research submissions found in the {activeTab} queue.
+        <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm text-slate-500 text-xs">
+          No research submissions currently found under this queue.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {filteredSubmissions.map((sub) => {
-            const collegeInfo = UDM_COLLEGES.find(c => c.id === sub.department);
+            const isMismatch = sub.titleIntegrity?.flaggedMismatch;
 
             return (
               <div
                 key={sub.submissionID}
-                className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-start justify-between gap-5"
               >
-                <div className="space-y-2 max-w-3xl">
-                  <div className="flex items-center space-x-2 text-xs">
-                    <span className="px-2 py-0.5 rounded font-bold bg-[#1a4731] text-white uppercase">
+                <div className="space-y-2.5 max-w-3xl">
+                  {/* Badges Row */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-mono text-[11px] font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200">
+                      {sub.documentNumber || sub.submissionID} • {sub.version || 'v1.0'}
+                    </span>
+
+                    <span className="px-2 py-0.5 rounded font-bold bg-[#1a4731] text-white uppercase text-[10px]">
                       {sub.department}
                     </span>
-                    <span className="text-slate-600 font-medium">
-                      {collegeInfo?.name} • {sub.course}
+
+                    <span
+                      className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase ${
+                        sub.publicationType === 'unpublished'
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                          : 'bg-purple-50 text-purple-700 border border-purple-200'
+                      }`}
+                    >
+                      {sub.publicationType === 'unpublished' ? 'Unpublished (Thesis)' : 'Published External'}
                     </span>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-[#1a4731] font-bold">Submitted: {sub.dateSubmitted}</span>
+
+                    {/* Routing State Pill */}
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                        sub.status === 'approved'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : sub.workflowStatus === 'endorsed_to_urelia'
+                          ? 'bg-indigo-100 text-indigo-800'
+                          : sub.workflowStatus === 'revision_requested'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-amber-100 text-amber-900'
+                      }`}
+                    >
+                      {sub.status === 'approved'
+                        ? '✓ Archived'
+                        : sub.workflowStatus === 'endorsed_to_urelia'
+                        ? 'Endorsed to URELIA'
+                        : sub.workflowStatus === 'revision_requested'
+                        ? 'Revision Needed'
+                        : 'Awaiting Review'}
+                    </span>
                   </div>
 
-                  <h3 className="text-lg font-bold text-slate-900">
+                  {/* Title */}
+                  <h3 className="text-base font-bold text-slate-900 leading-snug">
                     {sub.title}
                   </h3>
 
-                  <p className="text-xs text-slate-600 line-clamp-2">
+                  {/* Abstract Preview */}
+                  <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
                     {sub.abstract}
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
+                  {/* Submitter & Author Meta */}
+                  <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500 pt-0.5">
                     <span className="flex items-center space-x-1">
                       <UserIcon className="w-3.5 h-3.5 text-[#1a4731]" />
                       <span>Submitter: <strong>{sub.submitterName}</strong> ({sub.submitterEmail})</span>
                     </span>
-                    <span>Authors: {sub.authors.join(', ')}</span>
+                    <span>Authors: {sub.authors ? sub.authors.join(', ') : 'N/A'}</span>
+                    <span>Submitted: {sub.dateSubmitted}</span>
                   </div>
 
-                  {sub.reviewNote && (
-                    <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 flex items-start space-x-2">
-                      <MessageSquare className="w-4 h-4 text-[#1a4731] shrink-0 mt-0.5" />
+                  {/* Title Integrity Indicator Badge */}
+                  {sub.titleIntegrity && (
+                    <div
+                      className={`p-2 rounded-lg text-[11px] font-medium flex items-center space-x-1.5 border ${
+                        isMismatch
+                          ? 'bg-rose-50 text-rose-900 border-rose-200'
+                          : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                      }`}
+                    >
+                      {isMismatch ? (
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      ) : (
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      )}
+                      <span>
+                        Title Integrity: <strong>{sub.titleIntegrity.matchScore}% Match</strong> &bull; {sub.titleIntegrity.notes}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Dean Comments (if endorsed) */}
+                  {sub.deanComments && (
+                    <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-950 flex items-start space-x-2">
+                      <MessageSquare className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
                       <div>
-                        <strong>Review Note:</strong> {sub.reviewNote}
+                        <strong>Dean's Endorsement ({sub.deanEndorsedBy}):</strong> {sub.deanComments}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Publication Proof Preview (if published) */}
+                  {sub.publicationProof?.externalUrl && (
+                    <div className="p-2.5 bg-purple-50/70 border border-purple-200 rounded-xl text-xs text-purple-950 flex items-center gap-2">
+                      <Award className="w-4 h-4 text-purple-700 shrink-0" />
+                      <span>
+                        Published at: <strong>{sub.publicationProof.publisherName || 'External Journal'}</strong> &bull;{' '}
+                        <a
+                          href={sub.publicationProof.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline font-bold text-purple-900 hover:text-purple-700"
+                        >
+                          View External Link
+                        </a>
+                      </span>
                     </div>
                   )}
                 </div>
 
-                {/* Review Action triggers */}
-                <div className="flex md:flex-col items-center justify-end gap-2 shrink-0">
-                  {sub.status === 'pending' ? (
-                    <button
-                      onClick={() => {
-                        setSelectedSubmission(sub);
-                        setReviewNote('');
-                      }}
-                      className="w-full px-4 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center justify-center space-x-1.5 cursor-pointer"
-                    >
-                      <CheckSquare className="w-4 h-4 text-[#c9a84c]" />
-                      <span>Evaluate Paper</span>
-                    </button>
-                  ) : (
-                    <span
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase ${
-                        sub.status === 'approved'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}
-                    >
-                      {sub.status}
+                {/* Action Trigger */}
+                <div className="shrink-0 flex md:flex-col items-end justify-center">
+                  <button
+                    onClick={() => {
+                      setSelectedSubmission(sub);
+                      setReviewNote('');
+                      setOverrideTitleMismatch(false);
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <CheckSquare className="w-4 h-4 text-[#c9a84c]" />
+                    <span>
+                      {isDeanUser ? 'Evaluate & Endorse' : isChairUser ? 'View Details' : 'Review & Approve'}
                     </span>
-                  )}
+                  </button>
                 </div>
               </div>
             );
@@ -746,136 +509,267 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
         </div>
       )}
 
-      {/* Paper Submission Review Dialog Modal */}
+      {/* Evaluation Modal Dialog */}
       {selectedSubmission && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl my-6 shadow-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto">
             
-            {/* Header: Evaluate Submission: SUB-XXXX-XXX */}
-            <div className="border-b border-dashed border-slate-300 pb-3 flex items-center justify-between">
+            {/* Modal Header */}
+            <div className="border-b border-dashed border-slate-200 pb-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <FileText className="w-5 h-5 text-[#c9a84c]" />
-                <h3 className="text-base sm:text-lg font-bold text-[#1a4731] tracking-tight">
-                  Evaluate Submission: <span className="font-mono text-slate-800">{selectedSubmission.submissionID}</span>
+                <h3 className="text-base font-bold text-[#1a4731]">
+                  Evaluation: <span className="font-mono text-slate-800">{selectedSubmission.documentNumber || selectedSubmission.submissionID}</span> ({selectedSubmission.version || 'v1.0'})
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedSubmission(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
-                title="Close"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Submission Metadata: Title, College & Course, File */}
-            <div className="space-y-1.5 text-xs text-slate-700">
-              <p className="leading-snug">
-                <span className="font-bold text-slate-900">Title:</span> {selectedSubmission.title}
+            {/* Document Info */}
+            <div className="space-y-1.5 text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <p>
+                <strong className="text-slate-900">Encoded Title:</strong> {selectedSubmission.title}
               </p>
-              <p className="text-slate-600">
-                <span className="font-bold text-slate-900">College:</span> {selectedSubmission.department} &bull; <span className="font-bold text-slate-900">Course:</span> {selectedSubmission.course}
+              <p>
+                <strong className="text-slate-900">Authors:</strong> {selectedSubmission.authors ? selectedSubmission.authors.join(', ') : 'N/A'}
               </p>
-              <p className="text-slate-600 flex flex-wrap items-center gap-1.5">
-                <span className="font-bold text-slate-900">File:</span>
-                <span className="font-mono text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                  {selectedSubmission.pdfFileName || `${selectedSubmission.submissionID}_Manuscript.pdf`}
+              <p>
+                <strong className="text-slate-900">College / Course:</strong> {selectedSubmission.department} &bull; {selectedSubmission.course}
+              </p>
+              <p>
+                <strong className="text-slate-900">Submitter:</strong> {selectedSubmission.submitterName} ({selectedSubmission.submitterEmail})
+              </p>
+              <p>
+                <strong className="text-slate-900">Manuscript File:</strong>{' '}
+                <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {selectedSubmission.pdfFileName || 'manuscript.pdf'}
                 </span>
-                <span className="text-slate-400 font-medium">(2.4 MB)</span>
               </p>
             </div>
 
-            {/* Document Action Buttons: [ View Full Document (New Tab) ] [ Download PDF ] */}
-            <div className="flex flex-wrap items-center gap-3 pt-0.5 pb-1">
+            {/* Document Readers / Actions */}
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => handleViewFullDocumentInNewTab(selectedSubmission)}
-                className="px-3.5 py-2 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-[#1a4731] border border-[#1a4731]/40 shadow-xs flex items-center space-x-2 transition-all hover:border-[#1a4731] cursor-pointer"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-[#1a4731] border border-[#1a4731]/40 shadow-2xs flex items-center space-x-1.5 cursor-pointer"
               >
                 <FileText className="w-3.5 h-3.5 text-[#1a4731]" />
-                <span>View Full Document (New Tab)</span>
-                <ExternalLink className="w-3.5 h-3.5 text-[#1a4731] ml-0.5" />
+                <span>Read Full Manuscript (New Tab)</span>
+                <ExternalLink className="w-3 h-3 text-[#1a4731]" />
               </button>
 
               <button
                 type="button"
                 onClick={() => handleDownloadPdf(selectedSubmission)}
                 disabled={isDownloadingPdf}
-                className="px-3.5 py-2 rounded-lg text-xs font-bold bg-[#c9a84c]/10 hover:bg-[#c9a84c]/20 text-[#7a5c1a] border border-[#c9a84c]/40 shadow-xs flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-60"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#c9a84c]/15 hover:bg-[#c9a84c]/25 text-[#1a4731] border border-[#c9a84c]/40 shadow-2xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
-                <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
+                <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download Evaluation Copy'}</span>
               </button>
-
-              {actionSuccessMsg && (
-                <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                  ✓ {actionSuccessMsg}
-                </span>
-              )}
             </div>
 
-            {/* Abstract Section: Full scrollable text */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-800">
+            {/* Title Integrity Check Audit Section */}
+            {selectedSubmission.titleIntegrity && (
+              <div
+                className={`p-3 rounded-xl border text-xs space-y-1 ${
+                  selectedSubmission.titleIntegrity.flaggedMismatch
+                    ? 'bg-rose-50/80 border-rose-300 text-rose-950'
+                    : 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+                }`}
+              >
+                <div className="flex items-center space-x-2 font-bold">
+                  {selectedSubmission.titleIntegrity.flaggedMismatch ? (
+                    <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                  )}
+                  <span>
+                    Title Integrity Check: {selectedSubmission.titleIntegrity.matchScore}% Match
+                  </span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  {selectedSubmission.titleIntegrity.notes}
+                </p>
+
+                {/* Mismatch Alert for Reviewer */}
+                {selectedSubmission.titleIntegrity.flaggedMismatch && (
+                  <div className="pt-1.5 border-t border-rose-200 mt-1">
+                    <p className="font-bold text-rose-900 text-[11px]">
+                      Policy Restriction: URELIA guidelines require rejecting submissions where paper titles do not match metadata.
+                    </p>
+                    {isUreliaUser && (
+                      <label className="mt-1.5 flex items-center space-x-2 text-[11px] text-slate-800 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={overrideTitleMismatch}
+                          onChange={e => setOverrideTitleMismatch(e.target.checked)}
+                          className="rounded text-[#1a4731] focus:ring-[#1a4731]"
+                        />
+                        <span>I have manually verified and reconciled the title in the full manuscript document.</span>
+                      </label>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Publication Proof (if published paper) */}
+            {selectedSubmission.publicationType === 'published' && selectedSubmission.publicationProof && (
+              <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl text-xs text-purple-950 space-y-1">
+                <div className="font-bold flex items-center space-x-1.5">
+                  <Award className="w-4 h-4 text-purple-700" />
+                  <span>Publication Proof & Evidence:</span>
+                </div>
+                <p>
+                  <strong>Publisher / Conference:</strong> {selectedSubmission.publicationProof.publisherName || 'N/A'}
+                </p>
+                {selectedSubmission.publicationProof.presentationDate && (
+                  <p>
+                    <strong>Presentation / Publication Date:</strong> {selectedSubmission.publicationProof.presentationDate}
+                  </p>
+                )}
+                {selectedSubmission.publicationProof.externalUrl && (
+                  <p className="break-all">
+                    <strong>URL:</strong>{' '}
+                    <a
+                      href={selectedSubmission.publicationProof.externalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline font-bold text-purple-900"
+                    >
+                      {selectedSubmission.publicationProof.externalUrl}
+                    </a>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Abstract */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
                 Abstract:
               </label>
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-36 sm:max-h-40 overflow-y-auto text-xs text-slate-700 leading-relaxed shadow-inner">
-                <p>{selectedSubmission.abstract}</p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-32 overflow-y-auto text-xs text-slate-700 leading-relaxed">
+                {selectedSubmission.abstract}
               </div>
-              <p className="text-[11px] text-slate-400 italic">
-                (Scroll to read full abstract)
-              </p>
             </div>
 
-            {/* Review Notes / Rejection Reasons */}
+            {/* Review Notes / Endorsement Comments */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                REVIEW NOTES / REJECTION REASONS (OPTIONAL FOR APPROVAL)
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
+                {isDeanUser
+                  ? "Dean's Evaluation Feedback & Endorsement Comments"
+                  : "Reviewer Feedback / Revision Notes"}
               </label>
               <textarea
                 rows={3}
                 value={reviewNote}
                 onChange={e => setReviewNote(e.target.value)}
-                placeholder="Enter feedback or review notes..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-800 focus:outline-none focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] transition-all"
+                placeholder={
+                  isDeanUser
+                    ? "Enter feedback or endorsement notes for URELIA Office..."
+                    : "Enter review notes, feedback, or rejection reasons..."
+                }
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-[#1a4731]"
               />
             </div>
 
-            {/* Bottom Actions: [ Cancel ] [ ✕ Reject Paper ] [ ✓ Approve & Archive ] */}
-            <div className="border-t border-dashed border-slate-300 pt-3 flex flex-wrap items-center justify-end gap-2.5">
+            {/* Action Buttons based on Role */}
+            <div className="border-t border-slate-200 pt-3 flex flex-wrap items-center justify-end gap-2.5">
               <button
                 type="button"
                 disabled={isProcessing}
                 onClick={() => setSelectedSubmission(null)}
-                className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
               >
-                Cancel
+                Close
               </button>
 
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={() => handleSubmissionAction('rejected')}
-                className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
-              >
-                <XCircle className="w-4 h-4" />
-                <span>Reject Paper</span>
-              </button>
+              {/* Dean Actions: Forward / Endorse to URELIA or Request Revision */}
+              {isDeanUser && selectedSubmission.status === 'pending' && (
+                <>
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={handleRequestRevisionAction}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Return for Revision</span>
+                  </button>
 
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={() => handleSubmissionAction('approved')}
-                className="px-5 py-2 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4 text-[#c9a84c]" />
-                <span>Approve & Archive</span>
-              </button>
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={handleDeanEndorse}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5 text-[#c9a84c]" />
+                    <span>Forward / Endorse to URELIA</span>
+                  </button>
+                </>
+              )}
+
+              {/* URELIA Final Approval Actions */}
+              {isUreliaUser && selectedSubmission.status === 'pending' && (
+                <>
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={handleRequestRevisionAction}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Request Revision</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={handleReject}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center space-x-1 cursor-pointer"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Reject Submission</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={
+                      isProcessing ||
+                      (selectedSubmission.titleIntegrity?.flaggedMismatch && !overrideTitleMismatch)
+                    }
+                    onClick={handleFinalApproval}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-40"
+                    title={
+                      selectedSubmission.titleIntegrity?.flaggedMismatch && !overrideTitleMismatch
+                        ? 'Approval restricted: Title discrepancy must be verified/resolved.'
+                        : ''
+                    }
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-[#c9a84c]" />
+                    <span>
+                      {selectedSubmission.publicationType === 'unpublished'
+                        ? 'Final Approve as Unpublished Archive'
+                        : 'Final Approve & Publish to Catalog'}
+                    </span>
+                  </button>
+                </>
+              )}
             </div>
+
           </div>
         </div>
       )}
+
     </div>
   );
 };

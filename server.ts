@@ -234,19 +234,17 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // Validate allowed domain constraint (UDM or personal Gmail)
-  const isValidDomain = settingsDB.allowedDomains.some(domain => cleanEmail.endsWith(`@${domain}`));
-  if (!isValidDomain) {
-    return res.status(403).json({
-      error: 'Access restricted: Only official UDM (@udm.edu.ph) or personal Gmail (@gmail.com) email addresses are allowed.'
-    });
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
   }
 
   let user = usersDB.find(u => u.email.toLowerCase() === cleanEmail);
 
   if (!user) {
     return res.status(401).json({
-      error: 'Account not found. Please register and confirm your email address (@udm.edu.ph or @gmail.com) before signing in.'
+      error: 'Account not found. Please register and verify your email address before signing in.'
     });
   }
 
@@ -273,12 +271,10 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // Check domain constraint (UDM or personal Gmail)
-  const isValidDomain = settingsDB.allowedDomains.some(domain => cleanEmail.endsWith(`@${domain}`));
-  if (!isValidDomain) {
-    return res.status(403).json({
-      error: 'Access restricted: Registration is limited to UDM institutional emails (@udm.edu.ph) and personal Gmail (@gmail.com).'
-    });
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
   }
 
   // Check existing
@@ -316,11 +312,11 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // Validate official UDM domain or personal Gmail
-  const isAllowedDomain = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
-  if (!isAllowedDomain) {
-    return res.status(403).json({
-      error: 'Registration requires an official UDM email (@udm.edu.ph) or personal Gmail (@gmail.com).'
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    return res.status(400).json({
+      error: 'Please enter a valid email address.'
     });
   }
 

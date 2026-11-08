@@ -71,7 +71,26 @@ export function canViewUnpublished(user?: User | null): boolean {
   return true;
 }
 
-// Research submission is authorized for Program Chairs, Deans, and URELIA
+// Students CANNOT view full papers or download full manuscripts; Program Chairs, Deans, and URELIA can
+export function canViewFullPaper(user?: User | null): boolean {
+  if (!user || isStudent(user)) return false;
+  return isProgramChair(user) || isDean(user) || isUrelia(user);
+}
+
+// Final Archive & Publish approval is exclusively reserved for URELIA (Director / Admin)
+// Program Chairs and Deans CANNOT directly publish papers into the archive
+export function canDirectPublish(user?: User | null): boolean {
+  if (!user) return false;
+  return isUreliaDirector(user) || isUreliaAdmin(user);
+}
+
+// College Deans endorse unpublished paper requests to URELIA
+export function canEndorseSubmissions(user?: User | null): boolean {
+  if (!user) return false;
+  return isDean(user);
+}
+
+// Research submission is authorized for Program Chairs and URELIA (Direct upload)
 export function canSubmitResearch(user?: User | null): boolean {
   if (!user || isStudent(user)) return false;
   return true;
@@ -95,7 +114,7 @@ export function canManageUsers(user?: User | null): boolean {
   return isUreliaAdmin(user);
 }
 
-export function getUserRoleDisplayLabel(userOrRole?: User | UserRole | string): string {
+export function getUserRoleDisplayLabel(userOrRole?: User | UserRole | string | null): string {
   if (!userOrRole) return 'Student';
 
   let roleStr = '';
@@ -135,7 +154,7 @@ export function getUserRoleDisplayLabel(userOrRole?: User | UserRole | string): 
   }
 }
 
-export function getRoleBadgeClass(role?: UserRole | string): string {
+export function getRoleBadgeClass(role?: UserRole | string | null): string {
   const norm = String(role || '').toLowerCase();
   if (norm === 'urelia_admin' || norm === 'super_admin') {
     return 'bg-amber-400/20 text-amber-300 border border-amber-400/40';

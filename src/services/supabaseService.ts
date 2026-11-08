@@ -358,35 +358,170 @@ export async function createSubmission(submission: Submission): Promise<void> {
 /**
  * Approve a submission and publish research
  */
-export async function approveSubmission(submission: Submission, publishedResearch: Research): Promise<void> {
+export async function approveSubmission(
+  submission: Submission,
+  publishedResearch: Research,
+  decisionNote?: string,
+  reviewerName?: string
+): Promise<void> {
+  const now = new Date().toISOString();
   inMemorySubmissions = inMemorySubmissions.map(s =>
-    s.submissionID === submission.submissionID ? { ...s, status: 'approved' } : s
+    s.submissionID === submission.submissionID
+      ? {
+          ...s,
+          status: 'approved',
+          workflowStatus: 'approved',
+          ureliaReviewedBy: reviewerName || 'URELIA Director',
+          ureliaReviewedDate: now,
+          ureliaDecisionNote: decisionNote || 'Approved for Institutional Archival',
+          versionHistory: [
+            ...(s.versionHistory || []),
+            {
+              version: s.version || 'v1.0',
+              documentNumber: s.documentNumber || s.submissionID,
+              date: now,
+              actionBy: reviewerName || 'URELIA Director',
+              actionRole: 'URELIA Director',
+              action: submission.publicationType === 'unpublished' ? 'Approved as Unpublished Archive Record' : 'Approved & Published to Catalog',
+              notes: decisionNote || 'Final Institutional Approval'
+            }
+          ]
+        }
+      : s
   );
   inMemoryResearches = [publishedResearch, ...inMemoryResearches];
   notifySubmissions();
   notifyResearches();
 
   if (isSupabaseConfigured) {
-    await supabase
-      .from('submissions')
-      .update({ status: 'approved' })
-      .eq('id', submission.submissionID);
+    try {
+      await supabase
+        .from('submissions')
+        .update({
+          status: 'approved',
+          workflow_status: 'approved',
+          urelia_reviewed_by: reviewerName || 'URELIA Director',
+          urelia_decision_note: decisionNote || 'Approved for Institutional Archival'
+        })
+        .eq('id', submission.submissionID);
 
-    await supabase.from('researches').insert({
-      id: publishedResearch.researchID,
-      title: publishedResearch.title,
-      abstract: publishedResearch.abstract,
-      authors: publishedResearch.authors,
-      keywords: publishedResearch.keywords,
-      department: publishedResearch.department,
-      course: publishedResearch.course,
-      year: publishedResearch.year,
-      status: 'approved',
-      views_count: 0,
-      downloads_count: 0,
-      submitted_by: publishedResearch.submittedBy,
-      date_added: publishedResearch.dateAdded
-    });
+      await supabase.from('researches').insert({
+        id: publishedResearch.researchID,
+        title: publishedResearch.title,
+        abstract: publishedResearch.abstract,
+        authors: publishedResearch.authors,
+        keywords: publishedResearch.keywords,
+        department: publishedResearch.department,
+        course: publishedResearch.course,
+        year: publishedResearch.year,
+        status: 'approved',
+        views_count: 0,
+        downloads_count: 0,
+        submitted_by: publishedResearch.submittedBy,
+        date_added: publishedResearch.dateAdded
+      });
+    } catch (err: any) {
+      console.warn('Supabase approve error note:', err.message);
+    }
+  }
+}
+
+/**
+ * Dean Endorsement: Forward unpublished paper request to URELIA Office
+ */
+export async function endorseSubmissionToUrelia(
+  submissionID: string,
+  deanComments: string,
+  deanName: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  inMemorySubmissions = inMemorySubmissions.map(s =>
+    s.submissionID === submissionID
+      ? {
+          ...s,
+          workflowStatus: 'endorsed_to_urelia',
+          deanComments,
+          deanEndorsedBy: deanName,
+          deanEndorsedDate: now,
+          versionHistory: [
+            ...(s.versionHistory || []),
+            {
+              version: s.version || 'v1.0',
+              documentNumber: s.documentNumber || s.submissionID,
+              date: now,
+              actionBy: deanName,
+              actionRole: 'College Dean',
+              action: 'Endorsed to URELIA',
+              notes: deanComments
+            }
+          ]
+        }
+      : s
+  );
+  notifySubmissions();
+
+  if (isSupabaseConfigured) {
+    try {
+      await supabase
+        .from('submissions')
+        .update({
+          workflow_status: 'endorsed_to_urelia',
+          dean_comments: deanComments,
+          dean_endorsed_by: deanName,
+          dean_endorsed_date: now
+        })
+        .eq('id', submissionID);
+    } catch (e: any) {
+      console.warn('Supabase endorse note:', e.message);
+    }
+  }
+}
+
+/**
+ * Request Revision / Return to Submitter
+ */
+export async function requestSubmissionRevision(
+  submissionID: string,
+  reason: string,
+  reviewerName: string,
+  reviewerRole: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  inMemorySubmissions = inMemorySubmissions.map(s =>
+    s.submissionID === submissionID
+      ? {
+          ...s,
+          workflowStatus: 'revision_requested',
+          reviewNote: reason,
+          versionHistory: [
+            ...(s.versionHistory || []),
+            {
+              version: s.version || 'v1.0',
+              documentNumber: s.documentNumber || s.submissionID,
+              date: now,
+              actionBy: reviewerName,
+              actionRole: reviewerRole,
+              action: 'Revision Requested',
+              notes: reason
+            }
+          ]
+        }
+      : s
+  );
+  notifySubmissions();
+
+  if (isSupabaseConfigured) {
+    try {
+      await supabase
+        .from('submissions')
+        .update({
+          workflow_status: 'revision_requested',
+          review_note: reason
+        })
+        .eq('id', submissionID);
+    } catch (e: any) {
+      console.warn('Supabase revision note:', e.message);
+    }
   }
 }
 
@@ -600,12 +735,10 @@ export interface RegisterResult {
 export async function registerUserWithSupabase(data: RegisterPayload): Promise<RegisterResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
 
-  // Institutional and Personal email validation: @udm.edu.ph, @pau.udm.edu.ph, or @gmail.com
-  const isAllowed = normalizedEmail.endsWith('@udm.edu.ph') || 
-                    normalizedEmail.endsWith('@pau.udm.edu.ph') || 
-                    normalizedEmail.endsWith('@gmail.com');
-  if (!isAllowed) {
-    throw new Error('Access Denied: Registration is limited to official Universidad de Manila (@udm.edu.ph) and personal Gmail (@gmail.com) email addresses.');
+  // General email validation: accept any valid institutional or personal email address
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    throw new Error('Please enter a valid email address.');
   }
 
   const assignedRole: User['role'] = (data.role as UserRole) || 'student';
@@ -869,9 +1002,9 @@ export async function resendSignupOTP(email: string): Promise<void> {
  */
 export async function requestPasswordReset(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
-  const isAllowed = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
-  if (!isAllowed) {
-    throw new Error('Please enter a valid official Universidad de Manila (@udm.edu.ph) or Gmail (@gmail.com) email address.');
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    throw new Error('Please enter a valid email address.');
   }
   if (isSupabaseConfigured) {
     const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
@@ -942,10 +1075,10 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
   const clean = raw.toLowerCase();
   const candidateEmail = clean.includes('@') ? clean : `${clean}@udm.edu.ph`;
 
-  // Domain validation: require official @udm.edu.ph or personal @gmail.com
-  const isAllowedDomain = candidateEmail.endsWith('@udm.edu.ph') || candidateEmail.endsWith('@pau.udm.edu.ph') || candidateEmail.endsWith('@gmail.com');
-  if (candidateEmail.includes('@') && !isAllowedDomain) {
-    throw new Error('Access Denied: Only official Universidad de Manila (@udm.edu.ph) and personal Gmail (@gmail.com) email addresses are permitted.');
+  // Candidate email resolution (supports username, ID number, or full email)
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (candidateEmail.includes('@') && !emailRegex.test(candidateEmail)) {
+    throw new Error('Please enter a valid email address.');
   }
 
   // 1. Try Supabase Auth first if password is provided

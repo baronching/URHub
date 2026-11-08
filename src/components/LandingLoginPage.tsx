@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { User, UserRole, UDMCollege, UDM_COLLEGES, Research } from '../types';
 import udmBuildingBg from '../assets/images/udm_hero_building_1785654888561.jpg';
 import {
@@ -146,10 +146,10 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
 
     try {
       const cleanEmail = regEmail.trim().toLowerCase();
-      const isAllowedEmail = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-      if (!isAllowedEmail) {
-        throw new Error('Registration requires an official UDM email (@udm.edu.ph) or a personal Gmail address (@gmail.com).');
+      if (!emailRegex.test(cleanEmail)) {
+        throw new Error('Please enter a valid email address.');
       }
 
       if (regPassword !== regConfirmPassword) {
@@ -244,9 +244,9 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
 
     try {
       const cleanEmail = resetEmail.trim().toLowerCase();
-      const isAllowedEmail = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
-      if (!isAllowedEmail) {
-        throw new Error('Please enter a valid @udm.edu.ph institutional email or @gmail.com address.');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        throw new Error('Please enter a valid email address.');
       }
 
       await requestPasswordReset(cleanEmail);

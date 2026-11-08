@@ -29,6 +29,8 @@ import {
   recordUserReadingHistory,
   approveSubmission,
   rejectSubmission,
+  endorseSubmissionToUrelia,
+  requestSubmissionRevision,
   reviewAccessRequest,
   createAccessRequest,
   logoutUserWithSupabase
@@ -372,13 +374,13 @@ export default function App() {
 
     // Enforce access control: Students can ONLY view Published papers
     if (!canViewUnpublished(currentUser)) {
-      list = list.filter(r => r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected'));
+      list = list.filter(r => (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished');
     } else {
       // Filter by Publication Status for authorized Faculty/Admin/URELIA
       if (filters.publicationStatus === 'published') {
-        list = list.filter(r => r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected'));
+        list = list.filter(r => (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished');
       } else if (filters.publicationStatus === 'unpublished') {
-        list = list.filter(r => r.status === 'pending' || r.status === 'rejected');
+        list = list.filter(r => r.status === 'pending' || r.status === 'rejected' || r.publicationType === 'unpublished');
       }
     }
 
@@ -649,6 +651,10 @@ export default function App() {
           course: targetSub.course,
           year: targetSub.year,
           status: 'approved',
+          publicationType: targetSub.publicationType || 'unpublished',
+          documentNumber: targetSub.documentNumber,
+          version: targetSub.version || 'v1.0',
+          publicationProof: targetSub.publicationProof,
           viewsCount: 0,
           downloadsCount: 0,
           submittedBy: targetSub.submittedBy,
@@ -662,6 +668,36 @@ export default function App() {
       triggerToast(`Submission ${status} successfully!`);
     } catch (err: any) {
       triggerToast(err.message || 'Review failed', 'error');
+    }
+  };
+
+  // Handle Dean Endorsement to URELIA
+  const handleEndorseSubmission = async (submissionID: string, comments: string) => {
+    try {
+      await endorseSubmissionToUrelia(
+        submissionID,
+        comments,
+        currentUser?.name || 'College Dean'
+      );
+      triggerToast('Submission endorsed and routed to URELIA Office!', 'success');
+    } catch (err: any) {
+      triggerToast(err.message || 'Endorsement failed', 'error');
+    }
+  };
+
+  // Handle Reviewer Request for Revision
+  const handleRequestRevision = async (submissionID: string, reason: string) => {
+    try {
+      const reviewerRole = getUserRoleDisplayLabel(currentUser);
+      await requestSubmissionRevision(
+        submissionID,
+        reason,
+        currentUser?.name || 'Reviewer',
+        reviewerRole
+      );
+      triggerToast('Revision requested. Paper returned to submitter.', 'info');
+    } catch (err: any) {
+      triggerToast(err.message || 'Revision request failed', 'error');
     }
   };
 
@@ -1110,12 +1146,15 @@ export default function App() {
           </ErrorBoundary>
         )}
 
-        {/* TAB 3: ADMIN REVIEW QUEUE - EXCLUSIVELY URELIA */}
-        {activeTab === 'admin_review' && isUrelia(currentUser) && (
+        {/* TAB 3: REVIEW QUEUE - PROGRAM CHAIRS, DEANS, URELIA */}
+        {activeTab === 'admin_review' && canReviewSubmissions(currentUser) && (
           <AdminReviewDashboard
+            currentUser={currentUser}
             submissions={submissionsList}
             accessRequests={accessRequestsList}
             onReviewSubmission={handleReviewSubmission}
+            onEndorseSubmission={handleEndorseSubmission}
+            onRequestRevision={handleRequestRevision}
             onReviewAccessRequest={handleReviewAccessRequest}
           />
         )}

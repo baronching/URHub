@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { User, UserRole, UDMCollege, UDM_COLLEGES } from '../types';
 import {
   registerUserWithSupabase,
@@ -118,10 +118,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
       if (viewMode === 'register') {
         const cleanEmail = email.trim().toLowerCase();
 
-        // 1. Domain Validation
-        const isAllowedEmail = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
-        if (!isAllowedEmail) {
-          throw new Error('Registration requires an official UDM email (@udm.edu.ph) or personal Gmail (@gmail.com).');
+        // 1. Email Format Validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(cleanEmail)) {
+          throw new Error('Please enter a valid email address.');
         }
 
         // 2. Passwords Match
@@ -245,9 +245,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
 
     try {
       const cleanEmail = resetEmail.trim().toLowerCase();
-      const isAllowedEmail = cleanEmail.endsWith('@udm.edu.ph') || cleanEmail.endsWith('@pau.udm.edu.ph') || cleanEmail.endsWith('@gmail.com');
-      if (!isAllowedEmail) {
-        throw new Error('Please enter a valid @udm.edu.ph institutional email or @gmail.com address.');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        throw new Error('Please enter a valid email address.');
       }
 
       await requestPasswordReset(cleanEmail);

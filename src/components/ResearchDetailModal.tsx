@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Research, User, AccessRequest, UDM_COLLEGES } from '../types';
-import { canViewUnpublished } from '../utils/userUtils';
+import { canViewUnpublished, canViewFullPaper } from '../utils/userUtils';
 import { ManuscriptReader } from './ManuscriptReader';
 import jsPDF from 'jspdf';
 import {
@@ -51,35 +51,35 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   onRequestAccess,
   onOpenAuthModal
 }) => {
-  const [activeTab, setActiveTab] = useState<'abstract' | 'ai_assistant' | 'view_only_reader'>('abstract');
+  const [activeTab, setActiveTab] = useState<'abstract' | 'full_paper' | 'related_studies'>('abstract');
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
 
-  // Gemini AI Assistant State
-  const [aiSummary, setAiSummary] = useState<any | null>(null);
-  const [aiLoading, setAiLoading] = useState<boolean>(false);
-  const [aiError, setAiError] = useState<string>('');
+  // Background Academic Breakdown State
+  const [academicSummary, setAcademicSummary] = useState<any | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
+  const [analysisError, setAnalysisError] = useState<string>('');
   const [copiedSummary, setCopiedSummary] = useState<boolean>(false);
 
-  // Reset AI state on research paper change
+  // Reset state on research paper change
   useEffect(() => {
-    setAiSummary(null);
-    setAiLoading(false);
-    setAiError('');
+    setAcademicSummary(null);
+    setAnalysisLoading(false);
+    setAnalysisError('');
     setCopiedSummary(false);
   }, [research?.researchID]);
 
-  // Auto-fetch AI summary when AI assistant tab is opened
+  // Auto-fetch analysis when related studies tab is opened
   useEffect(() => {
-    if (activeTab === 'ai_assistant' && !aiSummary && !aiLoading && research) {
-      fetchAiSummary();
+    if (activeTab === 'related_studies' && !academicSummary && !analysisLoading && research) {
+      fetchAcademicSummary();
     }
   }, [activeTab, research?.researchID]);
 
-  // Fetch AI Academic Breakdown from Server (Gemini Flash AI)
-  const fetchAiSummary = async () => {
+  // Fetch Academic Breakdown from Server
+  const fetchAcademicSummary = async () => {
     if (!research) return;
-    setAiLoading(true);
-    setAiError('');
+    setAnalysisLoading(true);
+    setAnalysisError('');
     try {
       const res = await fetch('/api/ai/summarize', {
         method: 'POST',
@@ -112,7 +112,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
             sentences[3] || `Validated empirical methodologies with rigorous academic verification by ${authorsStr}.`,
             `Provides foundational documentation for future ${research.department} research and capstone projects at UDM.`
           ],
-          methodology: `Mixed-methods empirical study applying domain-specific frameworks, data collection protocols, and algorithmic analysis relevant to ${research.course || research.department}.`,
+          methodology: `Mixed-methods empirical study applying domain-specific frameworks, data collection protocols, and analytical verification relevant to ${research.course || research.department}.`,
           practicalImpact: `Advances educational research standards for Universidad de Manila and delivers actionable solutions for Manila stakeholders.`,
           alignedSDGs: [
             { sdgNumber: 4, sdgName: 'Quality Education', explanation: 'Enhances academic knowledge sharing and higher education research capacity at UDM.' },
@@ -125,11 +125,11 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
         };
       }
 
-      setAiSummary(summaryObj);
+      setAcademicSummary(summaryObj);
     } catch (err: any) {
-      console.warn('AI summary fetch error, using academic synthesis:', err);
+      console.warn('Academic summary fetch error, using synthesis:', err);
       const sentences = (research.abstract || '').split(/(?<=[.?!])\s+/).filter(Boolean);
-      setAiSummary({
+      setAcademicSummary({
         executiveSummary: sentences.slice(0, 2).join(' ') || `This study investigates innovative methodologies and practical solutions tailored for ${research.department} at Universidad de Manila.`,
         keyFindings: [
           sentences[2] || `Demonstrated empirical outcomes and measurable improvements in the ${research.department} field.`,
@@ -148,7 +148,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
         ]
       });
     } finally {
-      setAiLoading(false);
+      setAnalysisLoading(false);
     }
   };
 
@@ -387,7 +387,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
           </button>
         </div>
 
-        {/* Mode Selector Tabs (Abstract vs View-Only Full Document) */}
+        {/* Mode Selector Tabs (Abstract, Full Paper, Related Studies) */}
         <div className="shrink-0 bg-white px-3 sm:px-6 py-2 sm:py-2.5 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 select-none">
           <div className="grid grid-cols-3 sm:flex sm:items-center gap-1.5 sm:space-x-2">
             <button
@@ -404,56 +404,49 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
 
             <button
               onClick={() => {
-                setActiveTab('ai_assistant');
-                if (!currentUser) {
-                  if (onOpenAuthModal) onOpenAuthModal();
-                } else if (!aiSummary && !aiLoading) {
-                  fetchAiSummary();
-                }
-              }}
-              className={`px-2 sm:px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center space-x-1 sm:space-x-1.5 transition-all cursor-pointer ${
-                activeTab === 'ai_assistant'
-                  ? 'bg-[#1a4731] text-white shadow-sm ring-2 ring-[#c9a84c]/50'
-                  : 'bg-[#c9a84c]/15 text-[#1a4731] hover:bg-[#c9a84c]/25 border border-[#c9a84c]/30'
-              }`}
-            >
-              {currentUser ? (
-                <Sparkles className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
-              ) : (
-                <Lock className="w-3.5 h-3.5 text-[#1a4731]/70 shrink-0" />
-              )}
-              <span className="truncate">AI Assistant</span>
-              {currentUser ? (
-                <span className="hidden xs:inline-block px-1 py-0.2 rounded text-[9px] bg-[#c9a84c] text-[#1a4731] font-extrabold shrink-0">AI</span>
-              ) : (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-[#1a4731]/10 text-[#1a4731] font-bold shrink-0">Sign In</span>
-              )}
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('view_only_reader');
+                setActiveTab('full_paper');
                 if (!currentUser && onOpenAuthModal) {
                   onOpenAuthModal();
                 }
               }}
               className={`px-2 sm:px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center space-x-1 sm:space-x-1.5 transition-all cursor-pointer ${
-                activeTab === 'view_only_reader'
+                activeTab === 'full_paper'
                   ? 'bg-[#1a4731] text-white shadow-sm'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              {currentUser ? (
+              {canViewFullPaper(currentUser) ? (
                 <BookOpen className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
               ) : (
                 <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               )}
               <span className="truncate">Full Paper</span>
-              {currentUser ? (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">14 Pages</span>
+              {canViewFullPaper(currentUser) ? (
+                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                  Authorized
+                </span>
               ) : (
-                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-700 font-bold shrink-0">Sign In</span>
+                <span className="hidden xs:inline-block px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-bold shrink-0">
+                  Restricted
+                </span>
               )}
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('related_studies');
+                if (!academicSummary && !analysisLoading) {
+                  fetchAcademicSummary();
+                }
+              }}
+              className={`px-2 sm:px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center space-x-1 sm:space-x-1.5 transition-all cursor-pointer ${
+                activeTab === 'related_studies'
+                  ? 'bg-[#1a4731] text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#c9a84c] shrink-0" />
+              <span className="truncate">Related Studies</span>
             </button>
           </div>
 
@@ -504,24 +497,31 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
           ) : activeTab === 'abstract' ? (
             /* ABSTRACT & METADATA VIEW */
             <div className="space-y-4 sm:space-y-6">
-              {/* Direct Access Card for Authenticated UDM Researcher */}
-              {currentUser && (
-                <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
-                  <div className="flex items-center space-x-2.5 min-w-0">
-                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
-                      <BookOpen className="w-4 h-4 text-emerald-700" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-emerald-900 text-xs sm:text-sm truncate">
-                        Full Research Manuscript Available
-                      </p>
-                      <p className="text-emerald-700 text-[11px] truncate">
-                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email}) • View the complete 14-page manuscript in the <strong>Full Paper</strong> tab.
-                      </p>
-                    </div>
+              {/* Access Scope Banner with Dedicated In-Tab Download Action */}
+              <div className="p-3.5 sm:p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-2xs">
+                <div className="flex items-center space-x-2.5 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
+                    <FileText className="w-4 h-4 text-emerald-700" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-emerald-900 text-xs sm:text-sm truncate">
+                      Official Research Abstract & Catalog Record
+                    </p>
+                    <p className="text-emerald-700 text-[11px] truncate">
+                      {canViewFullPaper(currentUser)
+                        ? `Signed in as ${currentUser?.name} • Full manuscript available in Full Paper tab.`
+                        : `Authorized for student and public review. Use the button to download the official Abstract PDF.`}
+                    </p>
                   </div>
                 </div>
-              )}
+                <button
+                  onClick={handleDownloadAbstractPdf}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs inline-flex items-center justify-center space-x-1.5 shrink-0 transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
+                  <span>Download Abstract (PDF)</span>
+                </button>
+              </div>
 
               {/* Main Title - Responsive scaling */}
               <div className="space-y-2 sm:space-y-3">
@@ -569,12 +569,21 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Full Abstract Text */}
+              {/* Full Abstract Text with Dedicated Download Action */}
               <div className="space-y-2">
-                <h3 className="text-xs sm:text-sm font-bold text-[#1a4731] uppercase tracking-wider flex items-center space-x-1.5 sm:space-x-2">
-                  <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1a4731] shrink-0" />
-                  <span>Research Abstract</span>
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs sm:text-sm font-bold text-[#1a4731] uppercase tracking-wider flex items-center space-x-1.5 sm:space-x-2">
+                    <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1a4731] shrink-0" />
+                    <span>Research Abstract</span>
+                  </h3>
+                  <button
+                    onClick={handleDownloadAbstractPdf}
+                    className="text-xs font-bold text-[#1a4731] hover:underline flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#c9a84c]" />
+                    <span>Download Abstract PDF</span>
+                  </button>
+                </div>
                 <p className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-3.5 sm:p-5 rounded-xl border border-slate-200 text-left sm:text-justify break-words">
                   {research.abstract}
                 </p>
@@ -597,13 +606,13 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Constraint Warning Banner */}
+              {/* Institutional Rights Constraint Notice */}
               <div className="p-3.5 sm:p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-2.5 sm:space-x-3 text-xs text-amber-900">
                 <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold mb-0.5 text-xs sm:text-sm">UDM Institutional Rights Constraint</p>
+                  <p className="font-bold mb-0.5 text-xs sm:text-sm">UDM Institutional Archival Governance</p>
                   <p className="text-amber-800 leading-normal text-[11px] sm:text-xs">
-                    In compliance with Universidad de Manila URELIA Office policies: Only abstracts are downloadable as PDF files. The full research manuscript is provided exclusively in view-only protected mode.
+                    In compliance with Universidad de Manila URELIA Office policies and Republic Act 10173: Only official abstracts are downloadable. Full research manuscripts are restricted to Program Chairs, College Deans, and the URELIA Office.
                   </p>
                 </div>
               </div>
@@ -638,73 +647,91 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                 </div>
               )}
             </div>
-          ) : activeTab === 'ai_assistant' ? (
-            /* AI ASSISTANT & CHAT MODE (GEMINI 3.8 FLASH) - REQUIRES LOGIN */
-            !currentUser ? (
-              <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-2">
-                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
-                  <Sparkles className="w-7 h-7 text-amber-700" />
+          ) : activeTab === 'full_paper' ? (
+            /* FULL PAPER TAB: RESTRICTED TO CHAIRS, DEANS, URELIA */
+            canViewFullPaper(currentUser) ? (
+              <ManuscriptReader
+                research={research}
+                onDownloadAbstract={handleDownloadAbstractPdf}
+              />
+            ) : (
+              /* RESTRICTED ACCESS NOTICE FOR STUDENTS / PUBLIC */
+              <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-4 max-w-xl mx-auto shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-300">
+                  <ShieldAlert className="w-7 h-7 text-amber-700" />
                 </div>
-                <div className="space-y-1.5 max-w-md mx-auto">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Sign In to Access AI Research Assistant</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Gemini AI Research Intelligence and Q&A features are reserved for authenticated Universidad de Manila students, faculty, and administrative accounts. Please sign in to analyze this paper.
+                <div className="space-y-2">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    Full Manuscript Access Restricted
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    Full Manuscript Access Restricted: Reserved for Program Chairs, College Deans, and the URELIA Office in compliance with Republic Act 10173 and institutional archival guidelines.
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Students and public researchers may review and download official study abstracts.
                   </p>
                 </div>
-                {onOpenAuthModal && (
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
                   <button
-                    onClick={onOpenAuthModal}
-                    className="px-5 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
+                    type="button"
+                    onClick={handleDownloadAbstractPdf}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm inline-flex items-center justify-center space-x-2 transition-all cursor-pointer"
                   >
-                    <KeyRound className="w-4 h-4 text-[#c9a84c]" />
-                    <span>Sign In with UDM Account</span>
+                    <Download className="w-4 h-4 text-[#c9a84c]" />
+                    <span>Download Official Abstract (PDF)</span>
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('abstract')}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
+                  >
+                    <span>Return to Abstract</span>
+                  </button>
+                </div>
               </div>
-            ) : (
+            )
+          ) : (
+            /* RELATED STUDIES & INSTITUTIONAL ACADEMIC ANALYSIS TAB (NO CHATBOT/AI BRANDING) */
             <div className="space-y-6">
-              {/* Gemini Header Card */}
-              <div className="bg-gradient-to-r from-[#1a4731] to-[#123323] text-white p-4 sm:p-5 rounded-xl border border-[#c9a84c]/40 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              {/* Header Card */}
+              <div className="bg-[#1a4731] text-white p-4 sm:p-5 rounded-xl border border-[#c9a84c]/40 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-xl bg-[#c9a84c]/20 border border-[#c9a84c]/50 flex items-center justify-center shrink-0">
-                    <Sparkles className="w-5 h-5 text-[#c9a84c]" />
+                    <BookOpen className="w-5 h-5 text-[#c9a84c]" />
                   </div>
                   <div>
-                    <div className="flex items-center space-x-2">
-                      <h3 className="font-bold text-sm sm:text-base text-white">Gemini AI Research Intelligence</h3>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#c9a84c] text-[#1a4731]">
-                        Gemini Flash AI
-                      </span>
-                    </div>
+                    <h3 className="font-bold text-sm sm:text-base text-white">
+                      Institutional Academic Breakdown & Related Studies
+                    </h3>
                     <p className="text-xs text-slate-200">
-                      Automated academic analysis, methodology breakdown, SDG alignment & interactive Q&A
+                      Automated academic analysis, methodology breakdown, SDG alignment & related institutional works
                     </p>
                   </div>
                 </div>
 
                 <button
-                  onClick={fetchAiSummary}
-                  disabled={aiLoading}
+                  onClick={fetchAcademicSummary}
+                  disabled={analysisLoading}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/10 hover:bg-white/20 text-[#c9a84c] border border-[#c9a84c]/40 flex items-center space-x-1.5 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${aiLoading ? 'animate-spin' : ''}`} />
-                  <span>{aiLoading ? 'Analyzing...' : 'Refresh Breakdown'}</span>
+                  <RefreshCw className={`w-3.5 h-3.5 ${analysisLoading ? 'animate-spin' : ''}`} />
+                  <span>{analysisLoading ? 'Analyzing...' : 'Refresh Analysis'}</span>
                 </button>
               </div>
 
-              {/* Section 1: Academic Breakdown */}
-              {aiLoading ? (
+              {/* Analysis Content */}
+              {analysisLoading ? (
                 <div className="p-10 text-center bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                   <div className="w-10 h-10 border-3 border-[#1a4731] border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className="text-sm font-bold text-[#1a4731]">Gemini is analyzing "{research.title}"...</p>
+                  <p className="text-sm font-bold text-[#1a4731]">Analyzing academic structure for "{research.title}"...</p>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">Extracting key methodology, empirical findings, and United Nations SDG alignments.</p>
                 </div>
-              ) : aiError ? (
+              ) : analysisError ? (
                 <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center justify-between">
-                  <span>{aiError}</span>
-                  <button onClick={fetchAiSummary} className="font-bold underline ml-2 cursor-pointer">Retry</button>
+                  <span>{analysisError}</span>
+                  <button onClick={fetchAcademicSummary} className="font-bold underline ml-2 cursor-pointer">Retry</button>
                 </div>
-              ) : aiSummary ? (
+              ) : academicSummary ? (
                 <div className="space-y-4">
                   {/* Executive Summary Card */}
                   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-2">
@@ -715,7 +742,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                       </span>
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText(aiSummary.executiveSummary || aiSummary.tldr || research.abstract || '');
+                          navigator.clipboard.writeText(academicSummary.executiveSummary || academicSummary.tldr || research.abstract || '');
                           setCopiedSummary(true);
                           setTimeout(() => setCopiedSummary(false), 2000);
                         }}
@@ -726,7 +753,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                       </button>
                     </div>
                     <p className="text-xs sm:text-sm text-slate-700 leading-relaxed italic bg-slate-50 p-3.5 rounded-lg border border-slate-100">
-                      "{aiSummary.executiveSummary || aiSummary.tldr || research.abstract}"
+                      "{academicSummary.executiveSummary || academicSummary.tldr || research.abstract}"
                     </p>
                   </div>
 
@@ -739,7 +766,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                         <span>Key Findings & Outcomes</span>
                       </span>
                       <ul className="space-y-2 text-xs text-slate-700">
-                        {(aiSummary.keyFindings || aiSummary.bulletPoints || [
+                        {(academicSummary.keyFindings || academicSummary.bulletPoints || [
                           `Demonstrated empirical outcomes and validated practical models within ${research.department}.`,
                           `Validated empirical methodologies with rigorous academic verification authored by ${Array.isArray(research.authors) ? research.authors.join(', ') : research.authors}.`,
                           `Establishes an essential reference for institutional research at Universidad de Manila.`
@@ -764,13 +791,13 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                           <span className="font-bold text-[#1a4731] block mb-0.5">Methodology:</span>
                           <p className="text-slate-600">
-                            {aiSummary.methodology || aiSummary.methodologySummary || `Rigorous academic research conducted under the ${research.department} curriculum with statistical and analytical verification.`}
+                            {academicSummary.methodology || academicSummary.methodologySummary || `Rigorous academic research conducted under the ${research.department} curriculum with statistical and analytical verification.`}
                           </p>
                         </div>
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                           <span className="font-bold text-[#1a4731] block mb-0.5">Practical Impact:</span>
                           <p className="text-slate-600">
-                            {aiSummary.practicalImpact || aiSummary.practicalApplications || `Supports local governance, digital transformation, and educational research excellence for the City of Manila.`}
+                            {academicSummary.practicalImpact || academicSummary.practicalApplications || `Supports local governance, digital transformation, and educational research excellence for the City of Manila.`}
                           </p>
                         </div>
                       </div>
@@ -780,14 +807,14 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   {/* Aligned SDGs & Future Research Directions */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* SDG Alignment */}
-                    {aiSummary.alignedSDGs && aiSummary.alignedSDGs.length > 0 && (
+                    {academicSummary.alignedSDGs && academicSummary.alignedSDGs.length > 0 && (
                       <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
                         <span className="text-xs font-bold text-[#1a4731] uppercase tracking-wider flex items-center space-x-1.5">
                           <Building2 className="w-4 h-4 text-[#c9a84c]" />
                           <span>UN SDG Alignment</span>
                         </span>
                         <div className="space-y-2">
-                          {aiSummary.alignedSDGs.map((sdg: any, idx: number) => (
+                          {academicSummary.alignedSDGs.map((sdg: any, idx: number) => (
                             <div key={idx} className="p-2.5 bg-[#c9a84c]/10 border border-[#c9a84c]/30 rounded-lg text-xs">
                               <span className="font-bold text-[#1a4731] block">
                                 SDG {sdg.sdgNumber}: {sdg.sdgName}
@@ -800,14 +827,14 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                     )}
 
                     {/* Future Directions */}
-                    {aiSummary.futureResearchDirections && aiSummary.futureResearchDirections.length > 0 && (
+                    {academicSummary.futureResearchDirections && academicSummary.futureResearchDirections.length > 0 && (
                       <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
                         <span className="text-xs font-bold text-[#1a4731] uppercase tracking-wider flex items-center space-x-1.5">
                           <Sparkles className="w-4 h-4 text-[#1a4731]" />
                           <span>Future Research / Thesis Opportunities</span>
                         </span>
                         <ul className="space-y-2 text-xs text-slate-700">
-                          {aiSummary.futureResearchDirections.map((idea: string, idx: number) => (
+                          {academicSummary.futureResearchDirections.map((idea: string, idx: number) => (
                             <li key={idx} className="flex items-start space-x-2 bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-100">
                               <span className="text-emerald-700 font-bold">•</span>
                               <span className="leading-snug text-slate-700">{idea}</span>
@@ -817,27 +844,49 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                       </div>
                     )}
                   </div>
+
+                  {/* Related Institutional Studies */}
+                  {similarPapers.length > 0 && (
+                    <div className="pt-4 border-t border-slate-200 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                        <BookOpen className="w-4 h-4 text-[#1a4731]" />
+                        <span>Related Institutional Research in {research.department}</span>
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {similarPapers.map(sim => (
+                          <div
+                            key={sim.researchID}
+                            onClick={() => onSelectResearch(sim)}
+                            className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 hover:border-[#1a4731]/50 cursor-pointer transition-all hover:bg-white hover:shadow-xs"
+                          >
+                            <span className="text-[10px] text-[#1a4731] font-bold block mb-1">
+                              {sim.department} • {sim.year}
+                            </span>
+                            <h4 className="text-xs font-bold text-slate-900 line-clamp-2 hover:text-[#1a4731] mb-1">
+                              {sim.title}
+                            </h4>
+                            <p className="text-[10px] text-slate-500 truncate">
+                              {Array.isArray(sim.authors) ? sim.authors.join(', ') : sim.authors}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                  <Sparkles className="w-8 h-8 text-[#c9a84c] mx-auto" />
-                  <p className="text-xs text-slate-600">Click below to generate an academic AI breakdown of this research.</p>
+                  <BookOpen className="w-8 h-8 text-[#c9a84c] mx-auto" />
+                  <p className="text-xs text-slate-600">Click below to generate an academic analysis and breakdown of this research.</p>
                   <button
-                    onClick={fetchAiSummary}
+                    onClick={fetchAcademicSummary}
                     className="px-4 py-2 bg-[#1a4731] text-white rounded-lg text-xs font-bold hover:bg-[#123323] cursor-pointer"
                   >
-                    Generate AI Breakdown
+                    Generate Academic Analysis
                   </button>
                 </div>
               )}
             </div>
-            )
-          ) : (
-            /* VIEW-ONLY FULL DOCUMENT READER MODE FOR AUTHENTICATED UDM USERS */
-            <ManuscriptReader
-              research={research}
-              onDownloadAbstract={handleDownloadAbstractPdf}
-            />
           )}
         </div>
       </div>

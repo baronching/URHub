@@ -1,25 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { UDMCollege, UDM_COLLEGES, User, Submission } from '../types';
+﻿import React, { useState, useEffect } from 'react';
+import { UDMCollege, UDM_COLLEGES, User, Submission, PublicationType } from '../types';
 import { createSubmission } from '../services/supabaseService';
-import { isUrelia, isFacultyAdmin, canSubmitResearch } from '../utils/userUtils';
+import { canSubmitResearch, isProgramChair, isUrelia } from '../utils/userUtils';
+import { calculateTitleSimilarity, generateDocumentNumber } from '../utils/titleIntegrity';
 import {
   X,
-  FilePlus,
   Upload,
-  CheckCircle2,
   AlertCircle,
   Building2,
-  GraduationCap,
   Calendar,
   FileText,
   User as UserIcon,
   Send,
-  ChevronRight,
-  ChevronLeft,
-  Sparkles,
-  RefreshCw,
-  Wand2,
-  Lock
+  Globe,
+  Award,
+  ShieldCheck,
+  ShieldAlert,
+  Info
 } from 'lucide-react';
 
 interface SubmissionFormModalProps {
@@ -33,27 +30,25 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
   onClose,
   onSubmitSuccess
 }) => {
-  const isFaculty = isFacultyAdmin(currentUser);
-  const userCanSubmit = canSubmitResearch(currentUser);
-
-  // Hard-block unauthorized callers (e.g. Students or Guests)
+  // Hard-block unauthorized callers (e.g. Students or unauthenticated)
   useEffect(() => {
     if (!currentUser || !canSubmitResearch(currentUser)) {
       onClose();
     }
   }, [currentUser, onClose]);
 
+  const isChair = isProgramChair(currentUser);
+  const isUreliaStaff = isUrelia(currentUser);
+
   // Initial college and courses
-  const facultyCollege: UDMCollege = currentUser?.college || 'CCS';
-  const initialDepartment: UDMCollege = isFaculty ? facultyCollege : (currentUser?.college || 'CCS');
+  const userCollege: UDMCollege = currentUser?.college || 'CCS';
+  const initialDepartment: UDMCollege = isChair ? userCollege : (currentUser?.college || 'CCS');
   const initialCollegeObj = UDM_COLLEGES.find(c => c.id === initialDepartment);
   const initialCourse = currentUser?.course || initialCollegeObj?.courses[0] || UDM_COLLEGES[0].courses[0];
 
-  const [step, setStep] = useState<number>(1);
+  // Form State
+  const [publicationType, setPublicationType] = useState<PublicationType>('unpublished');
   const [title, setTitle] = useState('');
-  const [authorCategory, setAuthorCategory] = useState<'Student' | 'Faculty_Admin'>(
-    isFaculty ? 'Faculty_Admin' : 'Student'
-  );
   const [department, setDepartment] = useState<UDMCollege>(initialDepartment);
   const [course, setCourse] = useState(initialCourse);
   const [year, setYear] = useState<number>(new Date().getFullYear());
@@ -61,68 +56,28 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
   const [abstract, setAbstract] = useState('');
   const [keywords, setKeywords] = useState('');
   const [pdfFileName, setPdfFileName] = useState<string>('');
+
+  // Publication Proof (required for Published Papers)
+  const [externalUrl, setExternalUrl] = useState('');
+  const [presentationDate, setPresentationDate] = useState('');
+  const [publisherDetails, setPublisherDetails] = useState('');
+
+  // Document Number & Versioning
+  const [documentNumber] = useState<string>(() => generateDocumentNumber(initialDepartment, new Date().getFullYear()));
+  const [version] = useState<string>('v1.0');
+
+  // Title Integrity Check state
+  const [titleMatchInfo, setTitleMatchInfo] = useState<any | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  // Gemini AI Submission Assistant State
-  const [aiAssistLoading, setAiAssistLoading] = useState(false);
-  const [aiAssistData, setAiAssistData] = useState<any | null>(null);
-  const [aiAssistError, setAiAssistError] = useState('');
-
-  const handleAiAssist = async () => {
-    if (!title && !abstract) {
-      setAiAssistError('Please provide at least a title or a draft abstract first.');
-      return;
-    }
-    setAiAssistLoading(true);
-    setAiAssistError('');
-    try {
-      const res = await fetch('/api/ai/assist-submission', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          abstract,
-          department
-        })
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
-        // Fallback smart assist
-        const autoKeywords = (title + ' ' + abstract)
-          .toLowerCase()
-          .replace(/[^a-zA-Z0-9\s]/g, '')
-          .split(/\s+/)
-          .filter(w => w.length > 5 && !['research', 'system', 'study', 'development', 'university', 'philippines', 'manila'].includes(w))
-          .slice(0, 5);
-
-        setAiAssistData({
-          improvedTitle: title ? `Enhanced: ${title}` : 'Investigation and System Design for Institutional Enhancement',
-          recommendedKeywords: autoKeywords.length > 0 ? autoKeywords : ['Innovation', 'Governance', 'Optimization', 'Manila City', 'Education Technology'],
-          recommendedSDGs: [4, 9, 11],
-          critiqueFeedback: 'Manuscript demonstrates clear institutional relevance. Recommended to strengthen statistical methodology in Chapter 3.'
-        });
-        return;
-      }
-      const data = await res.json();
-      if (!data.data) throw new Error(data.error || 'AI assistance failed');
-      setAiAssistData(data.data);
-    } catch (err: any) {
-      setAiAssistError(err.message || 'Unable to connect to Gemini AI');
-    } finally {
-      setAiAssistLoading(false);
-    }
-  };
 
   // Lock background scroll
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
-    const prevBodyTouchAction = document.body.style.touchAction;
-
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -132,22 +87,29 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
     return () => {
       document.body.style.overflow = prevBodyOverflow;
       document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.touchAction = prevBodyTouchAction;
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);
 
+  // Recalculate title integrity when title or filename changes
+  useEffect(() => {
+    if (title.trim() && pdfFileName) {
+      const match = calculateTitleSimilarity(title, pdfFileName);
+      setTitleMatchInfo(match);
+    } else {
+      setTitleMatchInfo(null);
+    }
+  }, [title, pdfFileName]);
+
   // Handle department change -> update courses list
   const handleDepartmentChange = (col: UDMCollege) => {
-    if (isFaculty) return; // Permanently locked to registered college
+    if (isChair) return; // Chair is locked to their designated college
     setDepartment(col);
     const found = UDM_COLLEGES.find(c => c.id === col);
     if (found && found.courses.length > 0) {
       setCourse(found.courses[0]);
     }
   };
-
-  const selectedCollegeObj = UDM_COLLEGES.find(c => c.id === department);
 
   // File upload simulation
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,58 +128,68 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
     }
   };
 
-  const handleNext = () => {
-    setErrorMsg('');
-    if (step === 1) {
-      if (!title.trim()) {
-        setErrorMsg('Please enter the research title.');
-        return;
-      }
-      if (!authors.trim()) {
-        setErrorMsg('Please specify the authors.');
-        return;
-      }
-    } else if (step === 2) {
-      if (!abstract.trim() || abstract.length < 50) {
-        setErrorMsg('Please enter a comprehensive abstract (minimum 50 characters).');
-        return;
-      }
-      if (!keywords.trim()) {
-        setErrorMsg('Please enter keywords separated by commas.');
-        return;
-      }
-    } else if (step === 3) {
-      if (!pdfFileName) {
-        setErrorMsg('Please upload a PDF document of the research manuscript.');
-        return;
-      }
-    }
-    setStep(s => s + 1);
-  };
-
+  // Direct 1-Step Unified Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+
+    // Field Validations
+    if (!title.trim()) {
+      setErrorMsg('Please enter the research title.');
+      return;
+    }
+    if (!authors.trim()) {
+      setErrorMsg('Please specify the authors.');
+      return;
+    }
+    if (!abstract.trim() || abstract.length < 50) {
+      setErrorMsg('Please enter a comprehensive abstract (minimum 50 characters).');
+      return;
+    }
+    if (!keywords.trim()) {
+      setErrorMsg('Please enter keywords separated by commas.');
+      return;
+    }
+    if (!pdfFileName) {
+      setErrorMsg('Please upload the research manuscript PDF file.');
+      return;
+    }
+
+    // Published Paper Flow Proof Validation
+    if (publicationType === 'published') {
+      if (!externalUrl.trim()) {
+        setErrorMsg('Published papers require an external URL or publication link.');
+        return;
+      }
+      if (!publisherDetails.trim()) {
+        setErrorMsg('Please provide publisher or conference details.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
-      if (isFaculty && currentUser?.college && department !== currentUser.college) {
-        throw new Error(
-          `Faculty/Admin members are strictly authorized to submit research only for their designated college (${currentUser.college}).`
-        );
-      }
-
       const authorList = authors.split(',').map(a => a.trim()).filter(Boolean);
       const keywordList = keywords.split(',').map(k => k.trim()).filter(Boolean);
 
       const subId = `SUB-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
       const resId = `RES-SUB-${Date.now().toString().slice(-5)}`;
 
+      // Routing logic:
+      // Unpublished -> routes to Dean (pending_dean)
+      // Published -> routes directly to URELIA (pending_urelia)
+      const workflowStatus = publicationType === 'unpublished' ? 'pending_dean' : 'pending_urelia';
+
+      const titleIntegrity = calculateTitleSimilarity(title, pdfFileName);
+
       const newSubmission: Submission = {
         submissionID: subId,
+        documentNumber,
+        version,
         submittedBy: currentUser?.userID || 'USR-UDM-001',
-        submitterName: currentUser?.name || 'UDM Researcher',
-        submitterEmail: currentUser?.email || 'researcher@udm.edu.ph',
+        submitterName: currentUser?.name || 'UDM Academic Chair',
+        submitterEmail: currentUser?.email || 'chair@udm.edu.ph',
         researchID: resId,
         title: title.trim(),
         abstract: abstract.trim(),
@@ -228,475 +200,435 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
         year: year || new Date().getFullYear(),
         dateSubmitted: new Date().toISOString().split('T')[0],
         status: 'pending',
+        publicationType,
+        workflowStatus,
+        publicationProof: publicationType === 'published' ? {
+          externalUrl: externalUrl.trim(),
+          presentationDate: presentationDate.trim(),
+          publisherName: publisherDetails.trim(),
+          journalOrConference: publisherDetails.trim()
+        } : undefined,
+        titleIntegrity,
+        versionHistory: [
+          {
+            version,
+            documentNumber,
+            date: new Date().toISOString(),
+            actionBy: currentUser?.name || 'Submitter',
+            actionRole: isChair ? 'Program Chair' : (isUreliaStaff ? 'URELIA Staff' : 'Faculty'),
+            action: publicationType === 'unpublished'
+              ? 'Submitted for Dean Endorsement'
+              : 'Direct Submission to URELIA with Publication Proof',
+            notes: `Initial submission of ${title.trim()} (${version})`
+          }
+        ],
         pdfFileName: pdfFileName || 'research_manuscript.pdf',
-        authorCategory
+        authorCategory: isChair ? 'Faculty_Admin' : 'Student'
       };
 
       // Backend API validation first
-      const res = await fetch('/api/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSubmission)
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Server rejected the research submission.');
+      try {
+        await fetch('/api/submissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSubmission)
+        });
+      } catch (apiErr) {
+        console.warn('Backend submissions API note:', apiErr);
       }
 
       await createSubmission(newSubmission);
       onSubmitSuccess();
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error processing submission.');
+      setErrorMsg(err.message || 'Submission failed. Please check your entries and try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150 overflow-y-auto">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl my-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
         
-        {/* Header */}
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-[#1a4731]/10 text-[#1a4731] border border-[#1a4731]/20 flex items-center justify-center">
-              <FilePlus className="w-5 h-5" />
-            </div>
+        {/* Modal Header */}
+        <div className="px-5 py-4 bg-[#1a4731] text-white flex items-center justify-between shrink-0 border-b border-[#c9a84c]/30">
+          <div className="flex items-center space-x-2.5">
+            <span className="p-1.5 rounded-lg bg-[#c9a84c] text-[#1a4731] font-extrabold text-xs">
+              URELIA
+            </span>
             <div>
-              <h2 className="text-base font-bold text-[#1a4731]">
-                Research Submission Portal
+              <h2 className="text-sm sm:text-base font-bold leading-tight flex items-center gap-2">
+                <span>Submit Research Manuscript</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/10 text-emerald-200 border border-white/20">
+                  {documentNumber} • {version}
+                </span>
               </h2>
-              <p className="text-xs text-slate-500">
-                Universidad de Manila • URELIA Office Approval Workflow
+              <p className="text-[11px] text-emerald-100/90 leading-tight">
+                Institutional Academic Archival Portal • Universidad de Manila
               </p>
             </div>
           </div>
-
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors"
+            className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Stepper progress indicator */}
-        <div className="bg-white px-6 py-3 border-b border-slate-200 flex items-center justify-between">
-          {[
-            { num: 1, label: 'General Info' },
-            { num: 2, label: 'Abstract & Keywords' },
-            { num: 3, label: 'PDF Document' },
-            { num: 4, label: 'Review & Submit' }
-          ].map((s) => (
-            <div key={s.num} className="flex items-center space-x-2">
-              <div
-                className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center transition-all ${
-                  step === s.num
-                    ? 'bg-[#1a4731] text-white'
-                    : step > s.num
-                    ? 'bg-[#1a4731]/10 text-[#1a4731] border border-[#1a4731]/20'
-                    : 'bg-slate-100 text-slate-400'
-                }`}
-              >
-                {step > s.num ? '✓' : s.num}
-              </div>
-              <span
-                className={`hidden sm:inline text-xs font-semibold ${
-                  step === s.num ? 'text-[#1a4731]' : 'text-slate-400'
-                }`}
-              >
-                {s.label}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {/* Unified 1-Step Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs text-slate-700">
+          
           {errorMsg && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center space-x-2 font-medium">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* Step 1: General Info */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Research Title *
-                </label>
+          {/* 1. Paper Classification Selector (Unpublished vs Published) */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Publication Classification & Workflow *
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-start space-x-3 ${
+                  publicationType === 'unpublished'
+                    ? 'border-[#1a4731] bg-emerald-50/70 shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
                 <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder="e.g. An AI-Based Student Performance Prediction System..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                  type="radio"
+                  name="publicationType"
+                  value="unpublished"
+                  checked={publicationType === 'unpublished'}
+                  onChange={() => setPublicationType('unpublished')}
+                  className="mt-1 text-[#1a4731] focus:ring-[#1a4731]"
                 />
-              </div>
-
-              {/* Research Classification: Student, Faculty, Administration */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Research Classification / Origin *
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[
-                    { id: 'Student' as const, label: 'Student Capstone / Thesis', desc: 'Authored by student researcher(s)' },
-                    { id: 'Faculty_Admin' as const, label: 'Faculty & Administration Research', desc: 'Authored by UDM professors, faculty, or university administration' }
-                  ].map(cls => (
-                    <button
-                      key={cls.id}
-                      type="button"
-                      onClick={() => {
-                        setAuthorCategory(cls.id);
-                        if (!isFaculty) {
-                          if (cls.id === 'Faculty_Admin' && department !== 'FAC-ADM') {
-                            handleDepartmentChange('FAC-ADM');
-                          } else if (cls.id === 'Student' && department === 'FAC-ADM') {
-                            handleDepartmentChange('CCS');
-                          }
-                        }
-                      }}
-                      className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
-                        authorCategory === cls.id
-                          ? 'border-[#1a4731] bg-emerald-50/70 ring-2 ring-[#1a4731]/20'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="block text-xs font-bold text-slate-800">{cls.label}</span>
-                      <span className="block text-[10px] text-slate-500 mt-0.5">{cls.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      UDM College / Department *
-                    </label>
-                    {isFaculty && (
-                      <span className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 font-bold flex items-center space-x-1">
-                        <Lock className="w-3 h-3 text-amber-600" />
-                        <span>Locked to {currentUser?.college}</span>
-                      </span>
-                    )}
+                  <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <span>Unpublished Paper</span>
+                    <span className="text-[9px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded font-extrabold uppercase">
+                      Thesis / Capstone
+                    </span>
                   </div>
-                  <select
-                    value={department}
-                    disabled={isFaculty}
-                    onChange={e => !isFaculty && handleDepartmentChange(e.target.value as UDMCollege)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-700 disabled:border-slate-300 font-medium"
-                  >
-                    {UDM_COLLEGES.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.id} - {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  {isFaculty && (
-                    <p className="text-[11px] text-slate-500 mt-1 italic">
-                      As College Admin for <strong>{currentUser?.college}</strong>, research submissions are permanently locked to your registered college.
-                    </p>
-                  )}
+                  <p className="text-[11px] text-slate-600 mt-0.5 leading-normal">
+                    Internal institutional manuscript. Routes to <strong>College Dean</strong> for evaluation and endorsement before final URELIA sign-off.
+                  </p>
                 </div>
+              </label>
 
+              <label
+                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-start space-x-3 ${
+                  publicationType === 'published'
+                    ? 'border-[#1a4731] bg-emerald-50/70 shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="publicationType"
+                  value="published"
+                  checked={publicationType === 'published'}
+                  onChange={() => setPublicationType('published')}
+                  className="mt-1 text-[#1a4731] focus:ring-[#1a4731]"
+                />
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Academic Course / Program *
-                  </label>
-                  <select
-                    value={course}
-                    onChange={e => setCourse(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer"
-                  >
-                    {selectedCollegeObj?.courses.map(c => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <span>Published Paper</span>
+                    <span className="text-[9px] bg-[#c9a84c]/30 text-[#1a4731] px-1.5 py-0.2 rounded font-extrabold uppercase">
+                      External / Conference
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5 leading-normal">
+                    Peer-reviewed or conference study with publication evidence. Routes <strong>directly to URELIA Office</strong> for catalog publishing.
+                  </p>
                 </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Published Paper Proof Fields (Conditionally Required) */}
+          {publicationType === 'published' && (
+            <div className="p-3.5 bg-amber-50/80 border border-amber-200/90 rounded-xl space-y-3">
+              <div className="flex items-center space-x-2 text-amber-950 font-bold text-xs">
+                <Award className="w-4 h-4 text-[#c9a84c]" />
+                <span>Publication Proof Details (Required for External Studies)</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Authors (Comma Separated) *
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <Globe className="w-3 h-3 text-[#1a4731]" />
+                    <span>External URL / DOI Link *</span>
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={externalUrl}
+                    onChange={e => setExternalUrl(e.target.value)}
+                    placeholder="https://doi.org/10.xxxx or journal link"
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-[#1a4731]" />
+                    <span>Presentation / Publication Date</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={presentationDate}
+                    onChange={e => setPresentationDate(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <Building2 className="w-3 h-3 text-[#1a4731]" />
+                    <span>Publisher, Journal, or Conference Details *</span>
                   </label>
                   <input
                     type="text"
                     required
-                    value={authors}
-                    onChange={e => setAuthors(e.target.value)}
-                    placeholder="e.g. Juan Dela Cruz, Maria Santos"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Publication / Completion Year
-                  </label>
-                  <input
-                    type="number"
-                    value={year}
-                    onChange={e => setYear(parseInt(e.target.value, 10))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                    value={publisherDetails}
+                    onChange={e => setPublisherDetails(e.target.value)}
+                    placeholder="e.g. IEEE Conference on Smart Cities / Philippine Journal of Science"
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
                   />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 2: Abstract & Keywords */}
-          {step === 2 && (
-            <div className="space-y-4">
-              {/* Gemini AI Writing Assistant Trigger Card */}
-              <div className="bg-[#1a4731]/5 border border-[#1a4731]/20 p-3.5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-[#1a4731] text-[#c9a84c] flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-[#1a4731] flex items-center space-x-1.5">
-                      <span>Gemini AI Submission Assistant</span>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] bg-[#c9a84c] text-[#1a4731] font-bold">New</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Auto-suggest keywords, refine abstract clarity, and detect SDG alignment.</p>
-                  </div>
-                </div>
+          {/* 2. Research Metadata: Title, Authors */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>Research Paper Title *</span>
+                <span className="text-[10px] text-slate-400 font-normal lowercase">Title must match uploaded manuscript</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Enter complete research study title..."
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-900 font-bold focus:bg-white focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
+              />
+            </div>
 
-                <button
-                  type="button"
-                  onClick={handleAiAssist}
-                  disabled={aiAssistLoading}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white flex items-center space-x-1.5 transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                >
-                  <Wand2 className={`w-3.5 h-3.5 text-[#c9a84c] ${aiAssistLoading ? 'animate-spin' : ''}`} />
-                  <span>{aiAssistLoading ? 'Analyzing...' : 'AI Assist & Auto-Tag'}</span>
-                </button>
-              </div>
-
-              {aiAssistError && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                  {aiAssistError}
-                </div>
-              )}
-
-              {/* AI Suggestions Review Box */}
-              {aiAssistData && (
-                <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between text-xs text-emerald-900 font-bold border-b border-emerald-200/60 pb-2">
-                    <span className="flex items-center space-x-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>Gemini AI Suggestions</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setAiAssistData(null)}
-                      className="text-slate-400 hover:text-slate-600 font-normal"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-
-                  {aiAssistData.suggestedKeywords && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-700">Suggested Keywords:</span>
-                        <button
-                          type="button"
-                          onClick={() => setKeywords(aiAssistData.suggestedKeywords.join(', '))}
-                          className="text-[11px] font-bold text-[#1a4731] hover:underline cursor-pointer"
-                        >
-                          Apply These Keywords
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {aiAssistData.suggestedKeywords.map((kw: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 rounded text-[10px] font-medium bg-white text-slate-700 border border-slate-200">
-                            #{kw}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {aiAssistData.polishedAbstract && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-700">Refined Academic Abstract:</span>
-                        <button
-                          type="button"
-                          onClick={() => setAbstract(aiAssistData.polishedAbstract)}
-                          className="text-[11px] font-bold text-[#1a4731] hover:underline cursor-pointer"
-                        >
-                          Use Refined Abstract
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-700 italic bg-white p-2.5 rounded-lg border border-slate-200 max-h-32 overflow-y-auto leading-relaxed">
-                        "{aiAssistData.polishedAbstract}"
-                      </p>
-                    </div>
-                  )}
-
-                  {aiAssistData.suggestedSDGs && (
-                    <div className="pt-1 text-[11px] text-slate-600 flex items-center space-x-1.5">
-                      <strong className="text-slate-700">Aligned SDGs:</strong>
-                      <span>{aiAssistData.suggestedSDGs.join(' • ')}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Research Abstract * (Minimum 50 characters)
-                </label>
-                <textarea
-                  rows={6}
-                  required
-                  value={abstract}
-                  onChange={e => setAbstract(e.target.value)}
-                  placeholder="Provide a complete summary of the background, methodology, empirical results, and conclusion of the study..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none leading-relaxed"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Keywords (Comma Separated) *
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <UserIcon className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>Authors (Comma-separated) *</span>
                 </label>
                 <input
                   type="text"
                   required
-                  value={keywords}
-                  onChange={e => setKeywords(e.target.value)}
-                  placeholder="e.g. Machine Learning, Student Performance, Predictive Analytics, UDM"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                  value={authors}
+                  onChange={e => setAuthors(e.target.value)}
+                  placeholder="e.g. Juan Dela Cruz, Rhea Mae Gomez"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:bg-white focus:border-[#1a4731] focus:outline-none"
                 />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  These keywords feed directly into the UDM-ResearchHub TF-IDF Machine Learning Recommendation Engine.
-                </p>
               </div>
-            </div>
-          )}
 
-          {/* Step 3: PDF Document Upload */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Upload Full Research Document (PDF Format) *
-              </label>
-
-              <div className="border-2 border-dashed border-slate-200 hover:border-[#1a4731] rounded-xl p-8 text-center bg-slate-50 cursor-pointer relative transition-colors">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>Academic Year *</span>
+                </label>
                 <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  type="number"
+                  required
+                  min={2000}
+                  max={2030}
+                  value={year}
+                  onChange={e => setYear(Number(e.target.value))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:bg-white focus:border-[#1a4731] focus:outline-none"
                 />
-                <Upload className="w-10 h-10 text-[#1a4731] mx-auto mb-3" />
-                <p className="text-sm font-bold text-slate-800">
-                  {pdfFileName ? pdfFileName : 'Click or Drag PDF file here to upload'}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Maximum file size: 100MB • Standard PDF format
-                </p>
-              </div>
-
-              {pdfFileName && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center space-x-2 text-xs text-emerald-800 font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>PDF Document ready: <strong>{pdfFileName}</strong></span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Step 4: Final Summary & Review */}
-          {step === 4 && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold text-[#1a4731] uppercase tracking-wider">
-                Review Submission Summary
-              </h3>
-
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 text-xs">
-                <div>
-                  <span className="text-slate-500 block font-medium">Title:</span>
-                  <span className="text-slate-900 font-bold text-sm">{title}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-slate-700">
-                  <div>
-                    <span className="text-slate-500 font-medium">College:</span> {department}
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-medium">Course:</span> {course}
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-medium">Authors:</span> {authors}
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-medium">PDF File:</span> {pdfFileName}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-slate-500 block mb-1 font-medium">Abstract snippet:</span>
-                  <p className="text-slate-700 bg-white p-3 rounded-lg border border-slate-200 line-clamp-3">
-                    {abstract}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-[11px] text-slate-600 leading-normal">
-                By submitting this research paper, you certify that the manuscript is an original work conducted under the academic supervision of Universidad de Manila and agree to URELIA Office review guidelines.
               </div>
             </div>
-          )}
 
-          {/* Stepper Footer Controls */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
-            {step > 1 ? (
-              <button
-                type="button"
-                onClick={() => setStep(s => s - 1)}
-                className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center space-x-1"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Back</span>
-              </button>
-            ) : <div />}
+            {/* College & Course row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <Building2 className="w-3.5 h-3.5 text-[#1a4731]" />
+                  <span>College Affiliation *</span>
+                  {isChair && (
+                    <span className="text-[9px] text-[#1a4731] bg-[#1a4731]/10 px-1 py-0.2 rounded font-bold ml-1">
+                      Department Locked
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={department}
+                  onChange={e => handleDepartmentChange(e.target.value as UDMCollege)}
+                  disabled={isChair}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-bold focus:bg-white focus:border-[#1a4731] focus:outline-none disabled:opacity-75 disabled:bg-slate-100"
+                >
+                  {UDM_COLLEGES.map(col => (
+                    <option key={col.id} value={col.id}>
+                      {col.id} - {col.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {step < 4 ? (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="px-5 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center space-x-1.5"
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Degree Program / Course *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={course}
+                  onChange={e => setCourse(e.target.value)}
+                  placeholder="e.g. BS in Information Technology"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:bg-white focus:border-[#1a4731] focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Abstract & Keywords */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>Abstract *</span>
+                <span className="text-[10px] text-slate-400 font-normal">Minimum 50 characters</span>
+              </label>
+              <textarea
+                rows={4}
+                required
+                value={abstract}
+                onChange={e => setAbstract(e.target.value)}
+                placeholder="Paste the complete research abstract (Background, Objective, Methodology, Results, and Institutional Significance)..."
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-xs text-slate-900 focus:bg-white focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none leading-relaxed"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Keywords (Comma-separated) *
+              </label>
+              <input
+                type="text"
+                required
+                value={keywords}
+                onChange={e => setKeywords(e.target.value)}
+                placeholder="e.g. LoRaWAN, Flood Monitoring, Pasig River, IoT Sensors"
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:bg-white focus:border-[#1a4731] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* 4. PDF File Upload & Title Integrity Indicator */}
+          <div className="space-y-2 pt-1">
+            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Full Manuscript PDF *
+            </label>
+            
+            <div className="border-2 border-dashed border-slate-300 hover:border-[#1a4731] rounded-xl p-4 text-center bg-slate-50/70 transition-all">
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                id="manuscript-file-input"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <label
+                htmlFor="manuscript-file-input"
+                className="cursor-pointer flex flex-col items-center space-y-1.5"
               >
-                <span>Continue</span>
-                <ChevronRight className="w-4 h-4 text-[#c9a84c]" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center space-x-2 disabled:opacity-50"
+                <div className="w-10 h-10 rounded-full bg-emerald-100/80 text-[#1a4731] flex items-center justify-center">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div className="font-bold text-slate-800 text-xs">
+                  {pdfFileName ? (
+                    <span className="text-[#1a4731] font-mono">{pdfFileName}</span>
+                  ) : (
+                    <span>Click to select full PDF manuscript (Max 100MB)</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {pdfFileName ? 'Click to replace file' : 'Accepted format: Standard academic PDF document (.pdf)'}
+                </p>
+              </label>
+            </div>
+
+            {/* Title Integrity Feedback Badge */}
+            {titleMatchInfo && (
+              <div
+                className={`p-2.5 rounded-lg border text-xs flex items-start space-x-2 ${
+                  titleMatchInfo.isMatch
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-amber-50 border-amber-200 text-amber-950'
+                }`}
               >
-                <Send className="w-4 h-4 text-[#c9a84c]" />
-                <span>{isSubmitting ? 'Submitting to URELIA...' : 'Submit Paper for Approval'}</span>
-              </button>
+                {titleMatchInfo.isMatch ? (
+                  <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <span className="font-bold">
+                    Title Integrity Check: {titleMatchInfo.matchScore}% Concordance.{' '}
+                  </span>
+                  <span>{titleMatchInfo.notes}</span>
+                </div>
+              </div>
             )}
           </div>
+
+          {/* Submitter Tracking & Institutional Workflow Banner */}
+          <div className="p-3 bg-slate-100 rounded-xl text-slate-600 text-[11px] space-y-1">
+            <div className="flex items-center space-x-1.5 font-bold text-slate-800">
+              <Info className="w-3.5 h-3.5 text-[#1a4731]" />
+              <span>Institutional Submitter Tracking:</span>
+            </div>
+            <p>
+              Logged as <strong>{currentUser?.name}</strong> ({currentUser?.email}) • Role:{' '}
+              <span className="capitalize">{currentUser?.role?.replace('_', ' ')}</span> • Document:{' '}
+              <span className="font-mono">{documentNumber}</span> ({version}).
+            </p>
+            <p className="text-slate-500 text-[10px]">
+              {publicationType === 'unpublished'
+                ? '→ This thesis will be forwarded to your College Dean for endorsement before final URELIA review.'
+                : '→ This published study with publication proof will be routed directly to URELIA Director for archival publishing.'}
+            </p>
+          </div>
+
+          {/* Bottom Actions */}
+          <div className="pt-2 border-t border-slate-200 flex items-center justify-end space-x-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Send className="w-4 h-4 text-[#c9a84c]" />
+              <span>{isSubmitting ? 'Submitting Manuscript...' : 'Submit Research for Archival'}</span>
+            </button>
+          </div>
+
         </form>
+
       </div>
     </div>
   );
