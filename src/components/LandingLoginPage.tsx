@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, UserRole, UDMCollege, UDM_COLLEGES, Research } from '../types';
+import { INITIAL_USERS } from '../data/mockDatabase';
 import udmBuildingBg from '../assets/images/udm_hero_building_1785654888561.jpg';
 import {
   loginUserWithSupabase,
@@ -638,6 +639,78 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                       </span>
                     )}
                   </button>
+
+                  {/* Quick One-Click Instant Role Selector */}
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      <span className="flex items-center gap-1 text-[#1a4731]">
+                        <Zap className="w-3.5 h-3.5 text-[#c9a84c]" />
+                        <span>Instant Login by Role (1-Click)</span>
+                      </span>
+                      <span className="text-[#c9a84c] bg-[#1a4731] px-1.5 py-0.2 rounded font-mono text-[9px]">Official Matrix</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-left">
+                      <button
+                        type="button"
+                        onClick={() => onLoginSuccess(INITIAL_USERS[0])}
+                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                        title="Instant sign in as Student Juan Dela Cruz"
+                      >
+                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">1. Student</div>
+                        <div className="text-[9px] text-slate-500 truncate">Juan Dela Cruz</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onLoginSuccess(INITIAL_USERS[1])}
+                        className="p-1.5 sm:p-2 rounded-lg border border-teal-300 hover:border-teal-500 bg-teal-50/70 hover:bg-teal-100/70 transition-all text-left cursor-pointer group shadow-2xs ring-1 ring-teal-400/40"
+                        title="Instant sign in as Program Chair Prof. Maria Santos"
+                      >
+                        <div className="text-[10px] sm:text-[11px] font-bold text-teal-900 group-hover:text-[#1a4731]">2. Program Chair</div>
+                        <div className="text-[9px] text-teal-700 font-medium truncate">Prof. Maria Santos</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onLoginSuccess(INITIAL_USERS[2])}
+                        className="p-1.5 sm:p-2 rounded-lg border border-amber-300 hover:border-amber-500 bg-amber-50/70 hover:bg-amber-100/70 transition-all text-left cursor-pointer group shadow-2xs"
+                        title="Instant sign in as College Dean Dr. Carmelo Perez"
+                      >
+                        <div className="text-[10px] sm:text-[11px] font-bold text-amber-900 group-hover:text-[#1a4731]">3. College Dean</div>
+                        <div className="text-[9px] text-amber-700 font-medium truncate">Dr. Carmelo Perez</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onLoginSuccess(INITIAL_USERS[3])}
+                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                        title="Instant sign in as URELIA Staff Engr. Mark Tan"
+                      >
+                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">4. URELIA Staff</div>
+                        <div className="text-[9px] text-slate-500 truncate">Engr. Mark Tan</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onLoginSuccess(INITIAL_USERS[4])}
+                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                        title="Instant sign in as URELIA Director Dr. Roberto Del Rosario"
+                      >
+                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">5. Director</div>
+                        <div className="text-[9px] text-slate-500 truncate">Dr. Del Rosario</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onLoginSuccess(INITIAL_USERS[5])}
+                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                        title="Instant sign in as URELIA Administrator"
+                      >
+                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">6. Admin</div>
+                        <div className="text-[9px] text-slate-500 truncate">URELIA Admin</div>
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Facebook-style Divider */}
                   <div className="relative py-2">

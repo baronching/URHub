@@ -38,6 +38,8 @@ import {
 import { calculateIDF, getResearchTokens, scoreSearchRelevance, generateHybridRecommendations } from './utils/mlEngine';
 import {
   isUrelia,
+  isProgramChair,
+  isDean,
   canSubmitResearch,
   canViewUnpublished,
   canReviewSubmissions,
@@ -794,8 +796,8 @@ export default function App() {
             try {
               localStorage.setItem('udm_active_user', JSON.stringify(user));
             } catch {}
-            if (isUrelia(user)) {
-              setActiveTab('super_admin');
+            if (isProgramChair(user) || isDean(user) || isUrelia(user)) {
+              setActiveTab('admin_review');
             } else {
               setActiveTab('archive');
             }
@@ -1203,8 +1205,8 @@ export default function App() {
             try {
               localStorage.setItem('udm_active_user', JSON.stringify(user));
             } catch {}
-            if (isUrelia(user)) {
-              setActiveTab('super_admin');
+            if (isProgramChair(user) || isDean(user) || isUrelia(user)) {
+              setActiveTab('admin_review');
             } else {
               setActiveTab('archive');
             }

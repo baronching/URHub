@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, UserRole, UDMCollege, UDM_COLLEGES } from '../types';
+import { INITIAL_USERS } from '../data/mockDatabase';
 import {
   registerUserWithSupabase,
   loginUserWithSupabase,
@@ -682,17 +683,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
               {/* Quick Demo Accounts Selection */}
               <div className="pt-3 border-t border-slate-100 space-y-2">
                 <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                  <span>Quick Test Roles (One-Click Fill)</span>
-                  <span className="text-[#1a4731] lowercase text-[9px] font-mono">6 official roles</span>
+                  <span className="text-[#1a4731] font-bold">⚡ Instant Login by Role (1-Click)</span>
+                  <span className="text-[#c9a84c] bg-[#1a4731] px-1.5 py-0.2 rounded font-mono text-[9px]">Official Matrix</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-left">
                   <button
                     type="button"
                     onClick={() => {
-                      setEmail('jdelacruz@udm.edu.ph');
-                      setPassword('Password123!');
+                      if (INITIAL_USERS[0]) {
+                        onLoginSuccess(INITIAL_USERS[0]);
+                        onClose();
+                      }
                     }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                    title="Instant sign in as Student Juan Dela Cruz"
                   >
                     <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">1. Student</div>
                     <div className="text-[9px] text-slate-500 truncate">Juan Dela Cruz</div>
@@ -701,61 +705,76 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                   <button
                     type="button"
                     onClick={() => {
-                      setEmail('msantos@udm.edu.ph');
-                      setPassword('Password123!');
+                      if (INITIAL_USERS[1]) {
+                        onLoginSuccess(INITIAL_USERS[1]);
+                        onClose();
+                      }
                     }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                    className="p-2 rounded-lg border border-teal-300 hover:border-teal-500 bg-teal-50/70 hover:bg-teal-100/70 transition-all text-left cursor-pointer group shadow-2xs ring-1 ring-teal-400/40"
+                    title="Instant sign in as Program Chair Prof. Maria Santos"
                   >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">2. Program Chair</div>
-                    <div className="text-[9px] text-slate-500 truncate">Prof. Maria Santos</div>
+                    <div className="text-[11px] font-bold text-teal-900 group-hover:text-[#1a4731]">2. Program Chair</div>
+                    <div className="text-[9px] text-teal-700 font-medium truncate">Prof. Maria Santos</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setEmail('cperez.dean@udm.edu.ph');
-                      setPassword('Password123!');
+                      if (INITIAL_USERS[2]) {
+                        onLoginSuccess(INITIAL_USERS[2]);
+                        onClose();
+                      }
                     }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                    className="p-2 rounded-lg border border-amber-300 hover:border-amber-500 bg-amber-50/70 hover:bg-amber-100/70 transition-all text-left cursor-pointer group shadow-2xs"
+                    title="Instant sign in as College Dean Dr. Carmelo Perez"
                   >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">3. College Dean</div>
-                    <div className="text-[9px] text-slate-500 truncate">Dr. Carmelo Perez</div>
+                    <div className="text-[11px] font-bold text-amber-900 group-hover:text-[#1a4731]">3. College Dean</div>
+                    <div className="text-[9px] text-amber-700 font-medium truncate">Dr. Carmelo Perez</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setEmail('mtan.research@udm.edu.ph');
-                      setPassword('Password123!');
+                      if (INITIAL_USERS[3]) {
+                        onLoginSuccess(INITIAL_USERS[3]);
+                        onClose();
+                      }
                     }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                    title="Instant sign in as URELIA Staff Engr. Mark Tan"
                   >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">4. Research Staff</div>
-                    <div className="text-[9px] text-slate-500 truncate">Mark Anthony Tan</div>
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">4. URELIA Staff</div>
+                    <div className="text-[9px] text-slate-500 truncate">Engr. Mark Tan</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setEmail('areyes.urelia@udm.edu.ph');
-                      setPassword('AdminPassword123!');
+                      if (INITIAL_USERS[4]) {
+                        onLoginSuccess(INITIAL_USERS[4]);
+                        onClose();
+                      }
                     }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group"
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                    title="Instant sign in as URELIA Director Dr. Roberto Del Rosario"
                   >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">5. URELIA Director</div>
-                    <div className="text-[9px] text-slate-500 truncate">Dr. Alejandro Reyes</div>
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">5. Director</div>
+                    <div className="text-[9px] text-slate-500 truncate">Dr. Del Rosario</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setEmail('sysadmin@udm.edu.ph');
-                      setPassword('SuperAdmin123!');
+                      if (INITIAL_USERS[5]) {
+                        onLoginSuccess(INITIAL_USERS[5]);
+                        onClose();
+                      }
                     }}
-                    className="p-2 rounded-lg border border-[#c9a84c]/50 hover:border-[#1a4731] bg-[#1a4731]/5 hover:bg-[#1a4731]/10 transition-all text-left cursor-pointer group"
+                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
+                    title="Instant sign in as URELIA Administrator"
                   >
-                    <div className="text-[11px] font-bold text-[#1a4731]">6. URELIA Admin</div>
-                    <div className="text-[9px] text-slate-500 truncate">System Admin</div>
+                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">6. Admin</div>
+                    <div className="text-[9px] text-slate-500 truncate">URELIA Admin</div>
                   </button>
                 </div>
               </div>
