@@ -85,26 +85,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
 
   // Verification & Forgot Password State
   const [otpCode, setOtpCode] = useState('');
-  const [cachedOtp, setCachedOtp] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [pasteLinkInput, setPasteLinkInput] = useState('');
   const [showLinkPaste, setShowLinkPaste] = useState(false);
-
-  // Sync cached OTP from sessionStorage if available
-  useEffect(() => {
-    if (viewMode === 'verify_otp' && pendingEmail && !cachedOtp) {
-      try {
-        const raw = sessionStorage.getItem(`udm_pending_otp_${pendingEmail.trim().toLowerCase()}`);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed?.code) {
-            setCachedOtp(parsed.code);
-          }
-        }
-      } catch {}
-    }
-  }, [viewMode, pendingEmail, cachedOtp]);
 
   // Forgot password sub-state
   const [resetEmail, setResetEmail] = useState('');
@@ -175,12 +159,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
 
         if (result.needsVerification) {
           setPendingEmail(cleanEmail);
-          if (result.otpCode) {
-            setCachedOtp(result.otpCode);
-          }
           setViewMode('verify_otp');
           setResendCooldown(60);
-          setSuccessMsg(`A 6-digit verification code has been dispatched. Enter it below to activate your account.`);
+          setSuccessMsg(`A 6-digit verification code has been dispatched to ${cleanEmail}. Enter it below to activate your account.`);
         } else {
           onLoginSuccess(result.user);
           onClose();
@@ -198,24 +179,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
     }
   };
 
-  // Quick Auto-Fill and Verify Helper
-  const handleQuickVerify = async (codeToUse?: string) => {
-    const token = (codeToUse || cachedOtp || '123456').trim();
-    setErrorMsg('');
-    setSuccessMsg('');
-    setIsLoading(true);
-
-    try {
-      const verifiedUser = await verifySignupOTP(pendingEmail, token);
-      onLoginSuccess(verifiedUser);
-      onClose();
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Verification failed. Please check the code and try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Handle Signup OTP Verification
   const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,7 +189,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
     try {
       const cleanToken = otpCode.trim();
       if (!/^\d{6}$/.test(cleanToken)) {
-        throw new Error('Please enter a valid 6-digit numeric verification code.');
+        throw new Error('Please enter a valid 6-digit numeric verification code (numbers only).');
       }
 
       const verifiedUser = await verifySignupOTP(pendingEmail, cleanToken);
@@ -839,43 +802,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                 </p>
               </div>
 
-              {/* Instant Verification Assistant Banner */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-left space-y-2 text-emerald-950 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-900">
-                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Instant Activation Assistant</span>
-                  </div>
-                  {cachedOtp && (
-                    <span className="font-mono text-xs font-black tracking-widest bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded border border-emerald-300">
-                      Code: {cachedOtp}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] leading-relaxed text-emerald-800">
-                  Email delivery can be delayed by university spam filters. You can use your instant activation code below to activate your Supabase account immediately.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const codeToUse = cachedOtp || (function() {
-                      try {
-                        const raw = sessionStorage.getItem(`udm_pending_otp_${pendingEmail.trim().toLowerCase()}`);
-                        if (raw) return JSON.parse(raw).code;
-                      } catch {}
-                      return '123456';
-                    })();
-                    setOtpCode(codeToUse);
-                    handleQuickVerify(codeToUse);
-                  }}
-                  disabled={isLoading}
-                  className="w-full py-2.5 px-3 bg-[#1a4731] hover:bg-[#123323] text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer border border-[#c9a84c]/30 active:scale-[0.99]"
-                >
-                  <Zap className="w-3.5 h-3.5 text-[#c9a84c]" />
-                  <span>Auto-Fill Code & Activate Account Now</span>
-                </button>
-              </div>
-
               <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2 text-center">
@@ -899,7 +825,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                         setOtpCode(val.replace(/\D/g, '').slice(0, 6));
                       }
                     }}
-                    placeholder="123456"
+                    placeholder="••••••"
                     className="w-full max-w-[240px] mx-auto block bg-slate-50 border-2 border-slate-300 focus:border-[#1a4731] rounded-xl py-3 text-center text-2xl font-mono tracking-[0.5em] font-extrabold text-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#1a4731]/15 transition-all"
                   />
 

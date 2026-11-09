@@ -743,13 +743,57 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
   }
 
   const assignedRole: User['role'] = (data.role as UserRole) || 'student';
-  const userID = 'usr_' + Date.now();
 
-  const collegeInfo = UDM_COLLEGES.find(c => c.id === data.college);
-  const udmUnitFormatted = collegeInfo ? `${data.college} - ${collegeInfo.name.replace('College of ', '')}` : data.college;
+  // Check if account already exists in Supabase public.users
+  if (isSupabaseConfigured) {
+    try {
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id, email')
+        .ilike('email', normalizedEmail)
+        .maybeSingle();
 
-  const newUser: User = {
-    userID,
+      if (existingUser) {
+        throw new Error('An account with this email is already registered. Please proceed to the Sign In tab to log in.');
+      }
+    } catch (checkErr: any) {
+      if (checkErr.message?.includes('already registered')) {
+        throw checkErr;
+      }
+      console.warn('Supabase existing account check note:', checkErr.message);
+    }
+  }
+
+  // Also check existing in-memory / demo users
+  if (inMemoryUsers.some(u => u.email.toLowerCase() === normalizedEmail)) {
+    throw new Error('An account with this email is already registered. Please proceed to the Sign In tab to log in.');
+  }
+
+  // Send registration data and dispatch strictly 6-digit numeric OTP via backend Hostinger SMTP
+  // The account will ONLY be created in Supabase AFTER the user submits the correct OTP!
+  const res = await fetch('/api/auth/send-verification-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fullName: data.fullName.trim(),
+      email: normalizedEmail,
+      password: data.password,
+      role: assignedRole,
+      college: data.college,
+      idNumber: data.idNumber.trim(),
+      courseProgram: data.courseProgram.trim(),
+      yearLevel: data.yearLevel || '1st Year'
+    })
+  });
+
+  const result = await res.json();
+  if (!res.ok) {
+    throw new Error(result.error || 'Failed to dispatch verification code. Please check your network and try again.');
+  }
+
+  // Return pending verification state without saving to Supabase or active user storage
+  const pendingUserPlaceholder: User = {
+    userID: 'pending_' + Date.now(),
     name: data.fullName.trim(),
     fullName: data.fullName.trim(),
     email: normalizedEmail,
@@ -763,123 +807,16 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
     readingHistory: []
   };
 
-  if (isSupabaseConfigured && data.password) {
-    try {
-      const { data: authData, error } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password: data.password,
-        options: {
-          data: {
-            full_name: data.fullName.trim(),
-            role: data.role === 'Faculty_Admin' ? 'Faculty/Admin' : data.role,
-            id_number: data.idNumber.trim(),
-            udm_unit: udmUnitFormatted,
-            course: data.courseProgram.trim(),
-            year_level: data.yearLevel || '1st Year',
-            college: data.college,
-            course_program: data.courseProgram.trim(),
-            user_type: data.role
-          }
-        }
-      });
-
-      if (error) {
-        if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exist')) {
-          throw new Error('An account with this UDM email is already registered. Please proceed to the Sign In tab to log in.');
-        }
-        console.warn('Supabase auth.signUp non-fatal note:', error.message);
-      } else if (authData.user) {
-        newUser.userID = authData.user.id;
-        const isAlreadyRegistered = Array.isArray(authData.user.identities) && authData.user.identities.length === 0;
-        if (isAlreadyRegistered) {
-          throw new Error('This UDM institutional account already exists. Please switch to the Sign In tab to log in.');
-        }
-      }
-    } catch (authErr: any) {
-      if (authErr.message?.includes('already registered') || authErr.message?.includes('already exist')) {
-        throw authErr;
-      }
-      console.warn('Supabase auth.signUp warning, saving account directly:', authErr);
-    }
-  }
-
-  // 2. IMMEDIATELY UPSERT NEW USER INTO SUPABASE public.users TABLE!
-  if (isSupabaseConfigured) {
-    try {
-      const { error: dbErr } = await supabase.from('users').upsert({
-        id: newUser.userID,
-        name: newUser.name,
-        full_name: newUser.fullName || newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        user_type: newUser.userType || 'Student',
-        college: newUser.college,
-        id_number: newUser.idNumber || '',
-        course_program: newUser.courseProgram || newUser.course || '',
-        created_at: new Date().toISOString()
-      }, { onConflict: 'email' });
-      if (dbErr) {
-        console.warn('Supabase public.users direct upsert note:', dbErr.message);
-      } else {
-        console.log(`[Supabase Sync] Successfully saved new account ${newUser.email} to public.users table!`);
-      }
-    } catch (upsertErr: any) {
-      console.warn('Supabase public.users direct upsert error:', upsertErr.message);
-    }
-  }
-
-  // 3. Immediately register in-memory and local storage
-  await saveUser(newUser);
-
-  // 4. Generate & dispatch 6-digit numeric verification OTP
-  let activeOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-  try {
-    const res = await fetch('/api/auth/send-verification-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: newUser.userID,
-        fullName: data.fullName.trim(),
-        email: normalizedEmail,
-        password: data.password,
-        role: assignedRole,
-        college: data.college,
-        idNumber: data.idNumber.trim(),
-        courseProgram: data.courseProgram.trim(),
-        yearLevel: data.yearLevel || '1st Year'
-      })
-    });
-    const result = await res.json();
-    if (result?.otpCode) {
-      activeOtp = result.otpCode;
-    }
-  } catch (apiErr: any) {
-    if (apiErr.message?.includes('already registered')) {
-      throw apiErr;
-    }
-    console.warn('Backend send-verification-otp note:', apiErr.message);
-  }
-
-  // 5. Always persist OTP in sessionStorage so verification NEVER gets stuck
-  try {
-    sessionStorage.setItem(`udm_pending_otp_${normalizedEmail}`, JSON.stringify({
-      code: activeOtp,
-      expiresAt: Date.now() + 15 * 60 * 1000,
-      user: newUser
-    }));
-  } catch {}
-
   return {
-    user: newUser,
+    user: pendingUserPlaceholder,
     needsVerification: true,
-    otpCode: activeOtp,
-    message: `A 6-digit numeric verification code has been dispatched to ${normalizedEmail}. Please enter the numbers below to activate your account.`
+    message: result.message || `A 6-digit numeric verification code has been dispatched to ${normalizedEmail}. Please enter the code from your email to activate your account.`
   };
 }
 
 /**
- * Verify 6-digit Signup OTP token sent to user's @udm.edu.ph email (Numbers Only)
+ * Verify 6-digit Signup OTP token sent to user's institutional or personal email (Numbers Only)
+ * Only upon successful OTP verification does the backend officially create the user in Supabase!
  */
 export async function verifySignupOTP(email: string, tokenOrHash: string): Promise<User> {
   const cleanEmail = email.trim().toLowerCase();
@@ -892,147 +829,44 @@ export async function verifySignupOTP(email: string, tokenOrHash: string): Promi
     throw new Error('Please enter a valid 6-digit numeric verification code (numbers only).');
   }
 
-  // Helper to ensure user is properly activated and saved to Supabase
-  const activateAndPersist = async (user: User): Promise<User> => {
-    await saveUser(user);
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('users').upsert({
-          id: user.userID,
-          name: user.name,
-          full_name: user.fullName || user.name,
-          email: user.email,
-          role: user.role,
-          user_type: user.userType || 'Student',
-          college: user.college,
-          id_number: user.idNumber || '',
-          course_program: user.courseProgram || user.course || '',
-          created_at: new Date().toISOString()
-        }, { onConflict: 'email' });
-      } catch (e: any) {
-        console.warn('Supabase users activation upsert error:', e.message);
-      }
-    }
-    try {
-      localStorage.setItem('udm_active_user', JSON.stringify(user));
-    } catch {}
+  // Strictly verify OTP with backend. Supabase row creation only happens when code matches!
+  const res = await fetch('/api/auth/verify-registration-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: cleanEmail, otpCode: cleanToken })
+  });
 
-    // Notify backend to remove from 1-hour cleanup queue
-    try {
-      fetch('/api/auth/confirm-verified-registration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email })
-      }).catch(() => {});
-    } catch {}
+  const result = await res.json();
+  if (!res.ok || !result.success || !result.user) {
+    throw new Error(result.error || 'Incorrect or expired 6-digit verification code. Please check your email and try again.');
+  }
 
-    return user;
-  };
+  const activatedUser: User = result.user;
 
-  // 1. Check local session storage cached OTP (Instant verification & zero latency)
+  // Persist verified user in memory and localStorage
+  await saveUser(activatedUser);
   try {
-    const raw = sessionStorage.getItem(`udm_pending_otp_${cleanEmail}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      // Valid if matching code, fallback code 123456, or valid pending registration
-      if (parsed.code === cleanToken || cleanToken === '123456' || parsed.user) {
-        sessionStorage.removeItem(`udm_pending_otp_${cleanEmail}`);
-        return await activateAndPersist(parsed.user);
-      }
-    }
+    localStorage.setItem('udm_active_user', JSON.stringify(activatedUser));
   } catch {}
 
-  // 2. Try backend Hostinger OTP verification
-  try {
-    const res = await fetch('/api/auth/verify-registration-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: cleanEmail, otpCode: cleanToken })
-    });
-    const result = await res.json();
-    if (res.ok && result.user) {
-      return await activateAndPersist(result.user);
-    } else if (!res.ok && result.error && !result.error.includes('No pending registration')) {
-      throw new Error(result.error);
-    }
-  } catch (apiErr: any) {
-    if (apiErr.message?.includes('Incorrect') || apiErr.message?.includes('expired') || apiErr.message?.includes('numbers only')) {
-      throw apiErr;
-    }
-    console.warn('Backend verify-registration-otp note:', apiErr.message);
-  }
-
-  // 3. Check Supabase users table directly if user was already pre-registered
-  if (isSupabaseConfigured) {
-    try {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('*')
-        .ilike('email', cleanEmail)
-        .maybeSingle();
-
-      if (profile) {
-        const verifiedUser: User = {
-          userID: profile.id,
-          name: profile.name || profile.full_name || cleanEmail.split('@')[0],
-          fullName: profile.full_name || profile.name,
-          email: cleanEmail,
-          role: (profile.role as UserRole) || 'student',
-          userType: profile.user_type || 'Student',
-          college: (profile.college || 'CCS') as UDMCollege,
-          idNumber: profile.id_number || '',
-          courseProgram: profile.course_program || '',
-          readingHistory: profile.reading_history || []
-        };
-        return await activateAndPersist(verifiedUser);
-      }
-    } catch (sbErr) {
-      console.warn('Supabase direct lookup note:', sbErr);
-    }
-  }
-
-  // 4. In-memory fallback
-  const found = inMemoryUsers.find(u => u.email.toLowerCase() === cleanEmail);
-  if (found) {
-    return await activateAndPersist(found);
-  }
-
-  throw new Error('Invalid or expired 6-digit verification code. Please check your numbers or request a new code.');
+  return activatedUser;
 }
 
 /**
- * Resend verification OTP code to user's @udm.edu.ph email (Numbers Only)
+ * Resend verification OTP code to user's email via Hostinger SMTP (Numbers Only)
  */
 export async function resendSignupOTP(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
 
-  // Try backend Hostinger OTP resend
-  try {
-    const res = await fetch('/api/auth/resend-verification-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: cleanEmail })
-    });
-    if (res.ok) {
-      return;
-    }
-  } catch {}
+  const res = await fetch('/api/auth/resend-verification-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: cleanEmail })
+  });
 
-  // Try Supabase resend if configured
-  if (isSupabaseConfigured) {
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: cleanEmail
-    });
-    if (error) {
-      if (error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('seconds')) {
-        throw new Error('Verification email rate limit reached. Please wait 1-2 minutes before requesting a new code.');
-      }
-      if (error.message.toLowerCase().includes('already confirmed')) {
-        throw new Error('This account has already been verified! Please go to the Sign In tab to log in.');
-      }
-      throw new Error(error.message);
-    }
+  const result = await res.json();
+  if (!res.ok) {
+    throw new Error(result.error || 'Failed to resend verification code. Please check your details and try again.');
   }
 }
 

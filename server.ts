@@ -421,6 +421,24 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
     });
   }
 
+  if (serverSupabase) {
+    try {
+      const { data: existingUser } = await serverSupabase
+        .from('users')
+        .select('id')
+        .ilike('email', cleanEmail)
+        .maybeSingle();
+
+      if (existingUser) {
+        return res.status(400).json({
+          error: 'An account with this email is already registered. Please go to the Sign In tab to log in.'
+        });
+      }
+    } catch (checkErr: any) {
+      console.warn('Supabase check existing user error:', checkErr.message);
+    }
+  }
+
   // Run housekeeping cleanup for any expired unverified accounts (> 1 hour)
   cleanupExpiredPendingRegistrations().catch(() => {});
 
@@ -428,13 +446,13 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
   const assignedUserId = req.body.userId || `usr_${Date.now()}`;
 
-  // Store in pending map (15 minutes OTP code expiry, 1 hour account deletion expiry)
+  // Store in pending map (15 minutes OTP code expiry)
   pendingRegistrationOTPs.set(cleanEmail, {
     code: otpCode,
     userId: assignedUserId,
     createdAt: Date.now(),
     expiresAt: Date.now() + 15 * 60 * 1000,
-    cleanupAt: Date.now() + 60 * 60 * 1000, // Auto-delete from Supabase if not verified within 1 hour
+    cleanupAt: Date.now() + 60 * 60 * 1000,
     payload: {
       fullName: fullName.trim(),
       email: cleanEmail,
@@ -447,27 +465,6 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
     }
   });
 
-  // Immediately sync user record to Supabase public.users table!
-  if (serverSupabase) {
-    try {
-      await serverSupabase.from('users').upsert({
-        id: assignedUserId,
-        name: fullName.trim(),
-        full_name: fullName.trim(),
-        email: cleanEmail,
-        role: role || 'student',
-        user_type: role === 'Faculty_Admin' || role === 'Faculty' ? 'Faculty_Admin' : (role === 'student' ? 'Student' : role),
-        college: college || 'CCS',
-        id_number: (idNumber || '').trim(),
-        course_program: (courseProgram || '').trim(),
-        created_at: new Date().toISOString()
-      }, { onConflict: 'email' });
-      console.log(`[Supabase Sync] Immediate registration sync for ${cleanEmail} to public.users`);
-    } catch (sbErr: any) {
-      console.warn('[Supabase Sync] Pre-registration sync note:', sbErr.message);
-    }
-  }
-
   // Dispatch email with 6-digit numeric OTP via Hostinger SMTP
   await sendNumericOTPEmail(cleanEmail, fullName, otpCode);
 
@@ -475,7 +472,6 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
     success: true,
     needsVerification: true,
     email: cleanEmail,
-    otpCode: otpCode,
     message: `A 6-digit numeric verification code has been dispatched to ${cleanEmail}.`
   });
 });
@@ -498,7 +494,7 @@ app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response
   const pending = pendingRegistrationOTPs.get(cleanEmail);
   if (!pending) {
     return res.status(400).json({
-      error: 'No pending registration found for this email, or the code has expired. Please register again.'
+      error: 'No pending registration found for this email. Please register first.'
     });
   }
 
@@ -514,10 +510,11 @@ app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response
     });
   }
 
-  // Code is valid! Create and activate user
+  // Code is verified! Now officially create and activate user in Supabase
   const { payload } = pending;
+  const newUserId = pending.userId || `usr_${Date.now()}`;
   const newUser: User = {
-    userID: `USR-UDM-${Date.now().toString().slice(-4)}`,
+    userID: newUserId,
     name: payload.fullName,
     fullName: payload.fullName,
     email: cleanEmail,
@@ -532,12 +529,31 @@ app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response
     readingHistory: []
   };
 
-  usersDB.push(newUser);
-  pendingRegistrationOTPs.delete(cleanEmail);
-
-  // Sync to Supabase public.users table if configured
+  // Sync to Supabase Auth & public.users table ONLY AFTER OTP IS VERIFIED
   if (serverSupabase) {
     try {
+      if (serverSupabase.auth && (serverSupabase.auth as any).admin && payload.password) {
+        try {
+          const { data: authData, error: authErr } = await (serverSupabase.auth as any).admin.createUser({
+            email: cleanEmail,
+            password: payload.password,
+            email_confirm: true,
+            user_metadata: {
+              full_name: payload.fullName,
+              role: newUser.role,
+              college: newUser.college,
+              id_number: newUser.idNumber,
+              course_program: newUser.courseProgram
+            }
+          });
+          if (!authErr && authData?.user?.id) {
+            newUser.userID = authData.user.id;
+          }
+        } catch (authErr: any) {
+          console.warn('[Supabase Auth Admin] User creation note:', authErr.message);
+        }
+      }
+
       await serverSupabase.from('users').upsert({
         id: newUser.userID,
         name: newUser.name,
@@ -548,14 +564,16 @@ app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response
         college: newUser.college,
         id_number: newUser.idNumber,
         course_program: newUser.courseProgram,
-        reading_history: [],
         created_at: new Date().toISOString()
       }, { onConflict: 'email' });
-      console.log(`[Supabase Sync] Successfully saved ${cleanEmail} to public.users table in UDMrhub`);
+      console.log(`[Supabase Sync] Successfully verified and saved ${cleanEmail} to public.users table!`);
     } catch (syncErr: any) {
       console.warn('[Supabase Sync] Note on saving user to Supabase:', syncErr.message);
     }
   }
+
+  usersDB.push(newUser);
+  pendingRegistrationOTPs.delete(cleanEmail);
 
   const { password: _, ...safeUser } = newUser;
   res.status(200).json({
@@ -563,17 +581,6 @@ app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response
     message: 'Account successfully verified and activated! Welcome to UDM ResearchHub.',
     user: safeUser
   });
-});
-
-// 2b. Confirm User Verification (removes email from 1-hour deletion queue)
-app.post('/api/auth/confirm-verified-registration', (req: Request, res: Response) => {
-  const { email } = req.body;
-  if (email) {
-    const cleanEmail = email.trim().toLowerCase();
-    pendingRegistrationOTPs.delete(cleanEmail);
-    console.log(`[UDM Auth] Confirmed official activation for ${cleanEmail}. Removed from 1-hour cleanup queue.`);
-  }
-  res.status(200).json({ success: true, message: 'Account activation confirmed.' });
 });
 
 // 3. Resend 6-Digit Numeric OTP
