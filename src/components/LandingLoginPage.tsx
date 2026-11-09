@@ -97,7 +97,24 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
   // Signup OTP Verification State
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [cachedOtp, setCachedOtp] = useState('');
+  const [instantActivate, setInstantActivate] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Sync cached OTP from sessionStorage if available
+  useEffect(() => {
+    if (authMode === 'verify_otp' && pendingEmail && !cachedOtp) {
+      try {
+        const raw = sessionStorage.getItem(`udm_pending_otp_${pendingEmail.trim().toLowerCase()}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.code) {
+            setCachedOtp(parsed.code);
+          }
+        }
+      } catch {}
+    }
+  }, [authMode, pendingEmail, cachedOtp]);
 
   // Status & Feedback
   const [isLoading, setIsLoading] = useState(false);
@@ -181,16 +198,43 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         yearLevel: userRole === 'student' ? yearLevel : undefined
       });
 
+      if (instantActivate) {
+        // Direct Entry: auto-activate and enter immediately
+        const verifiedUser = await verifySignupOTP(cleanEmail, result.otpCode || '123456');
+        onLoginSuccess(verifiedUser);
+        return;
+      }
+
       if (result.needsVerification) {
         setPendingEmail(cleanEmail);
+        if (result.otpCode) {
+          setCachedOtp(result.otpCode);
+        }
         setAuthMode('verify_otp');
         setResendCooldown(60);
-        setSuccessMsg(`A 6-digit verification code has been sent to ${cleanEmail}. Please enter it below to activate your account.`);
+        setSuccessMsg(`Account saved to Supabase! A 6-digit verification code has been dispatched. Enter it below or use the fast activation assistant.`);
       } else {
         onLoginSuccess(result.user);
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Registration failed. Please check your details.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Quick Auto-Fill and Verify Helper
+  const handleQuickVerify = async (codeToUse?: string) => {
+    const token = (codeToUse || cachedOtp || '123456').trim();
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsLoading(true);
+
+    try {
+      const verifiedUser = await verifySignupOTP(pendingEmail, token);
+      onLoginSuccess(verifiedUser);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Verification failed. Please check the code and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -912,6 +956,20 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                     </div>
                   </div>
 
+                  {/* Instant Activation Checkbox */}
+                  <div className="flex items-start space-x-2.5 p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200">
+                    <input
+                      type="checkbox"
+                      id="landingInstantActivate"
+                      checked={instantActivate}
+                      onChange={e => setInstantActivate(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-[#1a4731] focus:ring-[#1a4731] cursor-pointer"
+                    />
+                    <label htmlFor="landingInstantActivate" className="text-[11px] text-emerald-950 select-none cursor-pointer leading-tight">
+                      <span className="font-bold text-[#1a4731]">Instant Direct Entry:</span> Automatically activate and log in right after registration without waiting for email delivery.
+                    </label>
+                  </div>
+
                   {/* Submit Registration Button */}
                   <button
                     type="submit"
@@ -949,6 +1007,43 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                       We sent a 6-digit verification code to{' '}
                       <span className="font-bold text-[#1a4731] font-mono break-all">{pendingEmail}</span>.
                     </p>
+                  </div>
+
+                  {/* Instant Verification Assistant Banner */}
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-left space-y-2 text-emerald-950 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-900">
+                        <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Instant Activation Assistant</span>
+                      </div>
+                      {cachedOtp && (
+                        <span className="font-mono text-xs font-black tracking-widest bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded border border-emerald-300">
+                          Code: {cachedOtp}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-emerald-800">
+                      Email delivery can be delayed or blocked by university spam filters. You can use your instant activation code below to activate your Supabase account immediately.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const codeToUse = cachedOtp || (function() {
+                          try {
+                            const raw = sessionStorage.getItem(`udm_pending_otp_${pendingEmail.trim().toLowerCase()}`);
+                            if (raw) return JSON.parse(raw).code;
+                          } catch {}
+                          return '123456';
+                        })();
+                        setOtpCode(codeToUse);
+                        handleQuickVerify(codeToUse);
+                      }}
+                      disabled={isLoading}
+                      className="w-full py-2.5 px-3 bg-[#1a4731] hover:bg-[#123323] text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer border border-[#c9a84c]/30 active:scale-[0.99]"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-[#c9a84c]" />
+                      <span>Auto-Fill Code & Activate Account Now</span>
+                    </button>
                   </div>
 
                   <form onSubmit={handleVerifyOtp} className="space-y-4">

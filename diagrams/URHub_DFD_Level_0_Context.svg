@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 950" width="100%" height="100%">
+  <defs>
+    <!-- Arrowhead markers -->
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#1a4731" />
+    </marker>
+    <marker id="arrow-gold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c9a84c" />
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569" />
+    </marker>
+
+    <!-- Filters for subtle Canva-compatible shadows -->
+    <filter id="card-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1400" height="950" fill="#f8fafc" rx="16"/>
+
+  <!-- Diagram Title Header -->
+  <g id="header">
+    <rect x="40" y="30" width="1320" height="70" rx="12" fill="#1a4731" filter="url(#card-shadow)"/>
+    <text x="60" y="62" fill="#c9a84c" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" letter-spacing="2">UNIVERSIDAD DE MANILA • URELIA OFFICE CAPSTONE</text>
+    <text x="60" y="85" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold">DATA FLOW DIAGRAM (DFD) — LEVEL 0 CONTEXT DIAGRAM</text>
+    <rect x="1170" y="48" width="170" height="34" rx="8" fill="#c9a84c"/>
+    <text x="1255" y="70" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" text-anchor="middle">URHub Process 0.0</text>
+  </g>
+
+  <!-- ======================================================== -->
+  <!-- CENTRAL PROCESS: 0.0 UDM-ResearchHub System (URHub)      -->
+  <!-- ======================================================== -->
+  <g id="central-process">
+    <circle cx="700" cy="480" r="145" fill="#ffffff" stroke="#1a4731" stroke-width="4" filter="url(#card-shadow)"/>
+    <circle cx="700" cy="480" r="137" fill="#f0fdf4" stroke="#c9a84c" stroke-width="2"/>
+    
+    <rect x="635" y="395" width="130" height="28" rx="6" fill="#1a4731"/>
+    <text x="700" y="414" fill="#c9a84c" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">PROCESS 0.0</text>
+    
+    <text x="700" y="450" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="bold" text-anchor="middle">UDM-ResearchHub</text>
+    <text x="700" y="475" fill="#0f172a" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" text-anchor="middle">(URHub Portal)</text>
+    <text x="700" y="500" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">Institutional Research Gateway</text>
+    <text x="700" y="516" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">&amp; Capstone Repository</text>
+
+    <!-- Heraldic Gold Ring Badge -->
+    <rect x="630" y="535" width="140" height="22" rx="11" fill="#c9a84c"/>
+    <text x="700" y="550" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">URELIA OFFICE • UDM</text>
+  </g>
+
+  <!-- ======================================================== -->
+  <!-- EXTERNAL ENTITY 1: Student Researcher (Top Left)         -->
+  <!-- ======================================================== -->
+  <g id="entity-student">
+    <rect x="70" y="150" width="260" height="110" rx="12" fill="#ffffff" stroke="#1a4731" stroke-width="2.5" filter="url(#card-shadow)"/>
+    <rect x="70" y="150" width="260" height="32" rx="12" fill="#1a4731"/>
+    <text x="200" y="171" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">Student Researcher</text>
+    <text x="200" y="196" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">ROLE 1 • UDM UNDERGRADUATE</text>
+    <text x="200" y="215" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Submits Manuscript PDF &amp; Metadata</text>
+    <text x="200" y="232" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Reads Published Papers (Full PDF)</text>
+    <text x="200" y="249" fill="#e11d48" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">🔒 Locked from Unpublished Archive</text>
+  </g>
+
+  <!-- Flows: Student <-> System -->
+  <!-- Inbound -->
+  <path d="M 330 185 Q 520 220 575 390" fill="none" stroke="#1a4731" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="360" y="225" width="195" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1" filter="url(#card-shadow)"/>
+  <text x="457" y="240" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">1. Manuscript PDF &amp; Thesis Data</text>
+  <text x="457" y="253" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">Title, Abstract, Keywords, Course</text>
+
+  <!-- Outbound -->
+  <path d="M 560 415 Q 460 300 330 225" fill="none" stroke="#c9a84c" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-gold)"/>
+  <rect x="345" y="300" width="195" height="34" rx="6" fill="#ffffff" stroke="#c9a84c" filter="url(#card-shadow)"/>
+  <text x="442" y="315" fill="#b45309" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">2. AI Recommendations &amp; Full PDF</text>
+  <text x="442" y="328" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">Published Reader, AI Keywords/Abstract</text>
+
+  <!-- ======================================================== -->
+  <!-- EXTERNAL ENTITY 2: Program Chair (Middle Left)           -->
+  <!-- ======================================================== -->
+  <g id="entity-chair">
+    <rect x="70" y="420" width="260" height="110" rx="12" fill="#ffffff" stroke="#0d9488" stroke-width="2.5" filter="url(#card-shadow)"/>
+    <rect x="70" y="420" width="260" height="32" rx="12" fill="#0d9488"/>
+    <text x="200" y="441" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">Program Chair</text>
+    <text x="200" y="466" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">ROLE 2 • DEPARTMENT LEAD</text>
+    <text x="200" y="485" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Department Paper Endorsement</text>
+    <text x="200" y="502" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Tracks Routing &amp; Rejection Notes</text>
+    <text x="200" y="519" fill="#e11d48" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">🔒 Locked from Unpublished Archive</text>
+  </g>
+
+  <!-- Flows: Chair <-> System -->
+  <path d="M 330 460 L 555 460" fill="none" stroke="#1a4731" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="345" y="438" width="180" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="435" y="452" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="9.5" font-weight="bold" text-anchor="middle">Routing &amp; Endorsement to Dean</text>
+
+  <path d="M 555 495 L 330 495" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-slate)"/>
+  <rect x="345" y="497" width="180" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="435" y="511" fill="#0d9488" font-family="Arial, Helvetica, sans-serif" font-size="9.5" font-weight="bold" text-anchor="middle">Review Queue &amp; Rejection Feedback</text>
+
+  <!-- ======================================================== -->
+  <!-- EXTERNAL ENTITY 3: College Dean (Bottom Left)            -->
+  <!-- ======================================================== -->
+  <g id="entity-dean">
+    <rect x="70" y="690" width="260" height="110" rx="12" fill="#ffffff" stroke="#d97706" stroke-width="2.5" filter="url(#card-shadow)"/>
+    <rect x="70" y="690" width="260" height="32" rx="12" fill="#d97706"/>
+    <text x="200" y="711" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">College Dean</text>
+    <text x="200" y="736" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">ROLE 3 • 7 UDM COLLEGES</text>
+    <text x="200" y="755" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Evaluates College Submissions</text>
+    <text x="200" y="772" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Endorses Papers to URELIA Directorate</text>
+    <text x="200" y="789" fill="#16a34a" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">✓ Unlocked: College Unpublished Archive</text>
+  </g>
+
+  <!-- Flows: Dean <-> System -->
+  <path d="M 330 720 Q 500 700 580 570" fill="none" stroke="#1a4731" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="360" y="660" width="195" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1" filter="url(#card-shadow)"/>
+  <text x="457" y="675" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">1. Evaluation &amp; Endorsement</text>
+  <text x="457" y="688" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">Dean Comments, Revision Notes to URELIA</text>
+
+  <path d="M 565 595 Q 460 740 330 760" fill="none" stroke="#d97706" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-slate)"/>
+  <rect x="345" y="750" width="195" height="34" rx="6" fill="#ffffff" stroke="#d97706" filter="url(#card-shadow)"/>
+  <text x="442" y="765" fill="#b45309" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">2. College Unpublished Manuscripts</text>
+  <text x="442" y="778" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">Full Embedded PDF Reviewer for College</text>
+
+  <!-- ======================================================== -->
+  <!-- EXTERNAL ENTITY 4: URELIA Personnel / Staff (Top Right)  -->
+  <!-- ======================================================== -->
+  <g id="entity-staff">
+    <rect x="1070" y="150" width="260" height="110" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2.5" filter="url(#card-shadow)"/>
+    <rect x="1070" y="150" width="260" height="32" rx="12" fill="#475569"/>
+    <text x="1200" y="171" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">URELIA Research Staff</text>
+    <text x="1200" y="196" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">ROLE 4 • INSTITUTIONAL RESEARCH</text>
+    <text x="1200" y="215" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Submits Institutional / Faculty Papers</text>
+    <text x="1200" y="232" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Batch Abstract PDF Downloads</text>
+    <text x="1200" y="249" fill="#e11d48" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">🔒 No Approval/Reject (Submits Only)</text>
+  </g>
+
+  <!-- Flows: Staff <-> System -->
+  <path d="M 1070 185 Q 880 220 825 390" fill="none" stroke="#1a4731" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="850" y="225" width="200" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1" filter="url(#card-shadow)"/>
+  <text x="950" y="240" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">1. Staff Institutional Paper Upload</text>
+  <text x="950" y="253" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">Routes Straight to Director Queue</text>
+
+  <path d="M 840 415 Q 940 300 1070 225" fill="none" stroke="#475569" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-slate)"/>
+  <rect x="860" y="300" width="200" height="34" rx="6" fill="#ffffff" stroke="#475569" filter="url(#card-shadow)"/>
+  <text x="960" y="315" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">2. Batch Abstracts &amp; Published Catalog</text>
+  <text x="960" y="328" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">jsPDF Downloads, Locked from Unpublished</text>
+
+  <!-- ======================================================== -->
+  <!-- EXTERNAL ENTITY 5: URELIA Director (Middle Right)        -->
+  <!-- ======================================================== -->
+  <g id="entity-director">
+    <rect x="1070" y="420" width="260" height="110" rx="12" fill="#ffffff" stroke="#1a4731" stroke-width="3" filter="url(#card-shadow)"/>
+    <rect x="1070" y="420" width="260" height="32" rx="12" fill="#1a4731"/>
+    <text x="1200" y="441" fill="#c9a84c" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">URELIA Director</text>
+    <text x="1200" y="466" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">ROLE 5 • FINAL ARCHIVAL AUTHORITY</text>
+    <text x="1200" y="485" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Sole Approval &amp; Rejection Authority</text>
+    <text x="1200" y="502" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Title Integrity Audit &amp; Reconciliation</text>
+    <text x="1200" y="519" fill="#16a34a" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">✓ Unlocked: System-Wide Unpublished</text>
+  </g>
+
+  <!-- Flows: Director <-> System -->
+  <path d="M 1070 460 L 845 460" fill="none" stroke="#1a4731" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+  <rect x="865" y="438" width="185" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="957" y="452" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="9.5" font-weight="bold" text-anchor="middle">Final Approval / Rejection Decision</text>
+
+  <path d="M 845 495 L 1070 495" fill="none" stroke="#c9a84c" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-gold)"/>
+  <rect x="865" y="497" width="185" height="20" rx="4" fill="#ffffff" stroke="#c9a84c"/>
+  <text x="957" y="511" fill="#b45309" font-family="Arial, Helvetica, sans-serif" font-size="9.5" font-weight="bold" text-anchor="middle">University Unpublished Archive &amp; Charts</text>
+
+  <!-- ======================================================== -->
+  <!-- EXTERNAL ENTITY 6: URELIA Admin (Bottom Right)           -->
+  <!-- ======================================================== -->
+  <g id="entity-admin">
+    <rect x="1070" y="690" width="260" height="110" rx="12" fill="#ffffff" stroke="#0f172a" stroke-width="2.5" filter="url(#card-shadow)"/>
+    <rect x="1070" y="690" width="260" height="32" rx="12" fill="#0f172a"/>
+    <text x="1200" y="711" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">URELIA System Admin</text>
+    <text x="1200" y="736" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">ROLE 6 • SUPERADMIN &amp; IT SYSTEM</text>
+    <text x="1200" y="755" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• User Role Assignment &amp; Maintenance</text>
+    <text x="1200" y="772" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">• Domain Rules &amp; Security Audits</text>
+    <text x="1200" y="789" fill="#16a34a" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">✓ Full Access: Unpublished &amp; Settings</text>
+  </g>
+
+  <!-- Flows: Admin <-> System -->
+  <path d="M 1070 720 Q 900 700 820 570" fill="none" stroke="#1a4731" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="850" y="660" width="195" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1" filter="url(#card-shadow)"/>
+  <text x="947" y="675" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">1. User RBAC &amp; System Configuration</text>
+  <text x="947" y="688" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">Role Overrides, Email Domain Rules</text>
+
+  <path d="M 835 595 Q 940 740 1070 760" fill="none" stroke="#0f172a" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-slate)"/>
+  <rect x="860" y="750" width="195" height="34" rx="6" fill="#ffffff" stroke="#0f172a" filter="url(#card-shadow)"/>
+  <text x="957" y="765" fill="#0f172a" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="bold" text-anchor="middle">2. System Audit Logs &amp; Metrics</text>
+  <text x="957" y="778" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle">Platform Health, Security Event Streams</text>
+
+  <!-- ======================================================== -->
+  <!-- EXTERNAL SUB-SYSTEMS: Gemini AI (Top) & Database (Bottom)-->
+  <!-- ======================================================== -->
+  <!-- Top Subsystem: AI Engine -->
+  <g id="subsystem-ai">
+    <rect x="520" y="140" width="360" height="60" rx="10" fill="#ffffff" stroke="#c9a84c" stroke-width="2" filter="url(#card-shadow)"/>
+    <text x="700" y="165" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" text-anchor="middle">Gemini AI API &amp; TF-IDF ML Engine</text>
+    <text x="700" y="185" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="middle">Abstract Synthesis • Keywords Extraction • Relevance Scoring</text>
+  </g>
+  <path d="M 680 200 L 680 335" fill="none" stroke="#c9a84c" stroke-width="2" marker-end="url(#arrow-gold)"/>
+  <path d="M 720 335 L 720 200" fill="none" stroke="#1a4731" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="640" y="270" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="bold" text-anchor="middle">Tokens</text>
+  <text x="765" y="270" fill="#b45309" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="bold" text-anchor="middle">AI Vectors</text>
+
+  <!-- Bottom Subsystem: Cloud Database -->
+  <g id="subsystem-db">
+    <rect x="520" y="760" width="360" height="60" rx="10" fill="#ffffff" stroke="#1a4731" stroke-width="2" filter="url(#card-shadow)"/>
+    <text x="700" y="785" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" text-anchor="middle">Supabase PostgreSQL &amp; Cloud Storage</text>
+    <text x="700" y="805" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="middle">Persisted Records • Manuscript Binary Storage (RA 10173 Compliant)</text>
+  </g>
+  <path d="M 680 625 L 680 760" fill="none" stroke="#1a4731" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <path d="M 720 760 L 720 625" fill="none" stroke="#c9a84c" stroke-width="2" marker-end="url(#arrow-gold)"/>
+  <text x="635" y="695" fill="#1a4731" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="bold" text-anchor="middle">SQL Write</text>
+  <text x="765" y="695" fill="#b45309" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="bold" text-anchor="middle">Encrypted Read</text>
+
+  <!-- Footer Legend -->
+  <g id="legend">
+    <rect x="40" y="870" width="1320" height="50" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="60" y="900" fill="#0f172a" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold">DIAGRAM LEGEND:</text>
+    
+    <line x1="190" y1="895" x2="230" y2="895" stroke="#1a4731" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+    <text x="240" y="899" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="10.5">Input Data Flow (To System)</text>
+
+    <line x1="430" y1="895" x2="470" y2="895" stroke="#c9a84c" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-gold)"/>
+    <text x="480" y="899" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="10.5">System Output Flow (To Entity)</text>
+
+    <rect x="680" y="887" width="16" height="16" rx="3" fill="#ffffff" stroke="#1a4731" stroke-width="1.5"/>
+    <text x="705" y="899" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="10.5">External Entity (User Role / External Service)</text>
+
+    <circle cx="990" cy="895" r="8" fill="#f0fdf4" stroke="#1a4731" stroke-width="1.5"/>
+    <text x="1005" y="899" fill="#334155" font-family="Arial, Helvetica, sans-serif" font-size="10.5">Level-0 Context Process Boundary</text>
+  </g>
+</svg>

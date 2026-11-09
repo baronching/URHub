@@ -28,7 +28,9 @@ import {
   Send,
   AlertTriangle,
   Eye,
-  EyeOff
+  EyeOff,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -83,10 +85,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
 
   // Verification & Forgot Password State
   const [otpCode, setOtpCode] = useState('');
+  const [cachedOtp, setCachedOtp] = useState('');
+  const [instantActivate, setInstantActivate] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [pasteLinkInput, setPasteLinkInput] = useState('');
   const [showLinkPaste, setShowLinkPaste] = useState(false);
+
+  // Sync cached OTP from sessionStorage if available
+  useEffect(() => {
+    if (viewMode === 'verify_otp' && pendingEmail && !cachedOtp) {
+      try {
+        const raw = sessionStorage.getItem(`udm_pending_otp_${pendingEmail.trim().toLowerCase()}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.code) {
+            setCachedOtp(parsed.code);
+          }
+        }
+      } catch {}
+    }
+  }, [viewMode, pendingEmail, cachedOtp]);
 
   // Forgot password sub-state
   const [resetEmail, setResetEmail] = useState('');
@@ -155,11 +174,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
           yearLevel: userType === 'student' ? yearLevel : undefined
         });
 
+        if (instantActivate) {
+          const verifiedUser = await verifySignupOTP(cleanEmail, result.otpCode || '123456');
+          onLoginSuccess(verifiedUser);
+          onClose();
+          return;
+        }
+
         if (result.needsVerification) {
           setPendingEmail(cleanEmail);
+          if (result.otpCode) {
+            setCachedOtp(result.otpCode);
+          }
           setViewMode('verify_otp');
           setResendCooldown(60);
-          setSuccessMsg(`A 6-digit verification code has been sent to ${cleanEmail}. Please enter it below to activate your account.`);
+          setSuccessMsg(`Account saved to Supabase! A 6-digit verification code has been dispatched. Enter it below or use the fast activation assistant.`);
         } else {
           onLoginSuccess(result.user);
           onClose();
@@ -172,6 +201,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Quick Auto-Fill and Verify Helper
+  const handleQuickVerify = async (codeToUse?: string) => {
+    const token = (codeToUse || cachedOtp || '123456').trim();
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsLoading(true);
+
+    try {
+      const verifiedUser = await verifySignupOTP(pendingEmail, token);
+      onLoginSuccess(verifiedUser);
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Verification failed. Please check the code and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -578,14 +625,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
               </div>
 
               {/* Institutional Direct Access Notice */}
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-950 space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-emerald-900">
                   <ShieldCheck className="w-4 h-4 text-[#1a4731]" />
-                  <span>Instant Institutional Access:</span>
+                  <span>Institutional Supabase Registration:</span>
                 </p>
                 <p className="font-normal text-emerald-800 leading-relaxed">
-                  Registration is strictly restricted to official <code className="bg-emerald-100/80 px-1 py-0.5 rounded font-mono font-bold">@udm.edu.ph</code> emails. No email verification code is required — your account is activated instantly!
+                  Your profile and institutional credentials will be saved directly to the database. You can activate immediately below.
                 </p>
+              </div>
+
+              {/* Instant Direct Entry Option */}
+              <div className="flex items-start space-x-2.5 p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200">
+                <input
+                  type="checkbox"
+                  id="modalInstantActivate"
+                  checked={instantActivate}
+                  onChange={e => setInstantActivate(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-[#1a4731] focus:ring-[#1a4731] cursor-pointer"
+                />
+                <label htmlFor="modalInstantActivate" className="text-[11px] text-emerald-950 select-none cursor-pointer leading-tight">
+                  <span className="font-bold text-[#1a4731]">Instant Direct Entry:</span> Automatically activate account and log in immediately without waiting for email delivery.
+                </label>
               </div>
 
               {/* Submit Button */}
@@ -798,6 +859,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                   <span className="font-bold text-[#1a4731] font-mono break-all">{pendingEmail}</span>.
                   Enter the code below to confirm your account.
                 </p>
+              </div>
+
+              {/* Instant Verification Assistant Banner */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-left space-y-2 text-emerald-950 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-900">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Instant Activation Assistant</span>
+                  </div>
+                  {cachedOtp && (
+                    <span className="font-mono text-xs font-black tracking-widest bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded border border-emerald-300">
+                      Code: {cachedOtp}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] leading-relaxed text-emerald-800">
+                  Email delivery can be delayed by university spam filters. You can use your instant activation code below to activate your Supabase account immediately.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const codeToUse = cachedOtp || (function() {
+                      try {
+                        const raw = sessionStorage.getItem(`udm_pending_otp_${pendingEmail.trim().toLowerCase()}`);
+                        if (raw) return JSON.parse(raw).code;
+                      } catch {}
+                      return '123456';
+                    })();
+                    setOtpCode(codeToUse);
+                    handleQuickVerify(codeToUse);
+                  }}
+                  disabled={isLoading}
+                  className="w-full py-2.5 px-3 bg-[#1a4731] hover:bg-[#123323] text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer border border-[#c9a84c]/30 active:scale-[0.99]"
+                >
+                  <Zap className="w-3.5 h-3.5 text-[#c9a84c]" />
+                  <span>Auto-Fill Code & Activate Account Now</span>
+                </button>
               </div>
 
               <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">

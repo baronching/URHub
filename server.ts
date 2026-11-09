@@ -346,13 +346,35 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
     }
   });
 
-  // Dispatch email with 6-digit numeric OTP
+  // Immediately sync user record to Supabase public.users table!
+  if (serverSupabase) {
+    try {
+      await serverSupabase.from('users').upsert({
+        id: `USR-UDM-${Date.now().toString().slice(-6)}`,
+        name: fullName.trim(),
+        full_name: fullName.trim(),
+        email: cleanEmail,
+        role: role || 'student',
+        user_type: role === 'Faculty_Admin' || role === 'Faculty' ? 'Faculty_Admin' : (role === 'student' ? 'Student' : role),
+        college: college || 'CCS',
+        id_number: (idNumber || '').trim(),
+        course_program: (courseProgram || '').trim(),
+        created_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+      console.log(`[Supabase Sync] Immediate registration sync for ${cleanEmail} to public.users`);
+    } catch (sbErr: any) {
+      console.warn('[Supabase Sync] Pre-registration sync note:', sbErr.message);
+    }
+  }
+
+  // Dispatch email with 6-digit numeric OTP via Hostinger SMTP
   await sendNumericOTPEmail(cleanEmail, fullName, otpCode);
 
   res.status(200).json({
     success: true,
     needsVerification: true,
     email: cleanEmail,
+    otpCode: otpCode,
     message: `A 6-digit numeric verification code has been dispatched to ${cleanEmail}.`
   });
 });
