@@ -1,9 +1,11 @@
 import React from 'react';
-import { Research, UDM_COLLEGES } from '../types';
-import { Eye, Download, FileText, Calendar, GraduationCap, ArrowUpRight, BookOpen } from 'lucide-react';
+import { Research, UDM_COLLEGES, User } from '../types';
+import { Eye, Download, FileText, Calendar, GraduationCap, ArrowUpRight, BookOpen, Lock } from 'lucide-react';
+import { canViewUnpublished } from '../utils/userUtils';
 
 interface ResearchCardProps {
   research: Research;
+  currentUser?: User | null;
   onSelect: (research: Research, initialTab?: 'abstract' | 'full_paper') => void;
   onDownloadAbstract: (research: Research, e: React.MouseEvent) => void;
   isSelected?: boolean;
@@ -12,12 +14,15 @@ interface ResearchCardProps {
 
 export const ResearchCard: React.FC<ResearchCardProps> = ({
   research,
+  currentUser,
   onSelect,
   onDownloadAbstract,
   isSelected = false,
   onToggleSelect
 }) => {
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
+  const isPublishedPaper = research.status === 'approved' || research.publicationType === 'published' || (!research.status && research.status !== 'pending' && research.status !== 'rejected');
+  const canReadPdf = isPublishedPaper || canViewUnpublished(currentUser);
 
   return (
     <div
@@ -136,18 +141,30 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
       {/* Footer Action Buttons */}
       <div className="pt-3 sm:pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(research, 'full_paper');
-            }}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
-            title="Read full submitted manuscript PDF"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-[#c9a84c]" />
-            <span>Read PDF</span>
-          </button>
+          {canReadPdf ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(research, 'full_paper');
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+              title="Read full submitted manuscript PDF"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-[#c9a84c]" />
+              <span>Read PDF</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center space-x-1 cursor-not-allowed opacity-60 select-none"
+              title="Unpublished manuscript: Accessible exclusively by College Deans, URELIA Director, and Admin"
+            >
+              <Lock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Restricted (3, 5, 6 Only)</span>
+            </button>
+          )}
 
           <button
             type="button"

@@ -30,10 +30,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
   const handlePublicationStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    if (!canViewUnpublished(currentUser) && (val === 'unpublished' || val === 'ALL')) {
-      if (onOpenAuthModal) {
-        onOpenAuthModal();
-      }
+    if (!canViewUnpublished(currentUser)) {
       return;
     }
     onChangeFilters({
@@ -141,7 +138,10 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             <select
               value={!canViewUnpublished(currentUser) ? 'published' : (filters.publicationStatus || 'ALL')}
               onChange={handlePublicationStatusChange}
-              className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
+              disabled={!canViewUnpublished(currentUser)}
+              className={`bg-transparent text-slate-800 font-bold focus:outline-none ${
+                !canViewUnpublished(currentUser) ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+              }`}
             >
               <option value="published">Published</option>
               {canViewUnpublished(currentUser) ? (
@@ -150,17 +150,17 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                   <option value="ALL">All Status (Published & Unpublished)</option>
                 </>
               ) : (
-                <option value="unpublished">
-                  Unpublished (Sign In as Dean / Director / Admin)
+                <option value="unpublished" disabled>
+                  Unpublished (Dean, Director & Admin Only 🔒)
                 </option>
               )}
             </select>
-            {currentUser && !canViewUnpublished(currentUser) && (
+            {!canViewUnpublished(currentUser) && (
               <span
-                className="text-[10px] text-amber-800 font-semibold bg-amber-100/80 px-1.5 py-0.5 rounded ml-0.5 select-none"
-                title="Only College Deans, URELIA Director, and URELIA Admin can access unpublished research"
+                className="text-[10px] text-amber-800 font-bold bg-amber-100/90 border border-amber-300 px-1.5 py-0.5 rounded ml-0.5 select-none"
+                title="Roles 1 (Student), 2 (Program Chair), and 4 (URELIA Staff) have no access to unpublished research"
               >
-                Published Only
+                Published Only (No Access)
               </span>
             )}
           </div>

@@ -1082,6 +1082,7 @@ export default function App() {
                     <ResearchCard
                       key={paper.researchID}
                       research={paper}
+                      currentUser={currentUser}
                       isSelected={selectedResearchIds.includes(paper.researchID)}
                       onToggleSelect={handleToggleSelectResearch}
                       onSelect={handleSelectResearch}
