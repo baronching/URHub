@@ -480,7 +480,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
             </div>
           )}
 
-          {(research.status === 'pending' || research.status === 'rejected') && !canViewUnpublished(currentUser) ? (
+          {(research.status === 'pending' || research.status === 'rejected' || research.publicationType === 'unpublished') && !canViewUnpublished(currentUser) ? (
             <div className="p-8 sm:p-12 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-4 my-4">
               <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
                 <Lock className="w-7 h-7 text-amber-700" />
@@ -488,7 +488,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
               <div className="space-y-1.5 max-w-md mx-auto">
                 <h3 className="text-base sm:text-lg font-bold text-slate-900">Restricted Unpublished Manuscript</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  This research paper is currently unpublished or pending administrative review. Unpublished manuscripts are exclusively accessible by Universidad de Manila Faculty, Administration, and the URELIA Office.
+                  This research paper is currently unpublished or pending administrative evaluation. Unpublished manuscripts are exclusively accessible by College Deans, the URELIA Director, and URELIA Admin.
                 </p>
               </div>
               {!currentUser && onOpenAuthModal && (
@@ -498,7 +498,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   className="px-5 py-2.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md inline-flex items-center space-x-2 transition-all cursor-pointer"
                 >
                   <KeyRound className="w-4 h-4 text-[#c9a84c]" />
-                  <span>Sign In as Faculty / Admin</span>
+                  <span>Sign In as Dean / Director / Admin</span>
                 </button>
               )}
             </div>
@@ -706,7 +706,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                     Unpublished Manuscript Access Restricted
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    This thesis/capstone manuscript is currently pending administrative evaluation and is restricted to Program Chairs, College Deans, and the URELIA Office. Once approved and published, the submitted PDF becomes viewable in full.
+                    This thesis/capstone manuscript is unpublished or pending administrative evaluation and is exclusively accessible to College Deans, the URELIA Director, and URELIA Admin. Once approved and published, the submitted PDF becomes viewable in full by all students and faculty.
                   </p>
                   <p className="text-xs text-slate-500">
                     You may review and download the official study abstract below.

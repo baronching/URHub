@@ -148,16 +148,16 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                 </>
               ) : (
                 <option value="unpublished" disabled>
-                  Unpublished (Faculty/Admin Only 🔒)
+                  Unpublished (Dean / Director / Admin Only 🔒)
                 </option>
               )}
             </select>
-            {currentUser && isStudent(currentUser) && (
+            {currentUser && !canViewUnpublished(currentUser) && (
               <span
                 className="text-[10px] text-amber-800 font-semibold bg-amber-100/80 px-1.5 py-0.5 rounded ml-0.5 select-none"
-                title="Students can only view approved, published research papers"
+                title="Only College Deans, URELIA Director, and URELIA Admin can access unpublished research"
               >
-                Student View
+                Published Only
               </span>
             )}
           </div>

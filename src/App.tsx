@@ -365,7 +365,10 @@ export default function App() {
         submittedBy: sub.submittedBy,
         dateAdded: sub.dateSubmitted,
         fullPdfUrl: sub.pdfFileName ? `/uploads/${sub.pdfFileName}` : undefined,
-        authorCategory: sub.authorCategory
+        authorCategory: sub.authorCategory,
+        publicationType: sub.publicationType || 'unpublished',
+        documentNumber: sub.documentNumber,
+        version: sub.version || 'v1.0'
       }));
 
     const combinedResearches: Research[] = [
@@ -375,11 +378,21 @@ export default function App() {
 
     let list = [...combinedResearches];
 
-    // Enforce access control: Students can ONLY view Published papers
+    // Enforce access control: Only Dean, Director, and Admin can access unpublished researches
     if (!canViewUnpublished(currentUser)) {
       list = list.filter(r => (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished');
     } else {
-      // Filter by Publication Status for authorized Faculty/Admin/URELIA
+      // If user is a College Dean, scope unpublished papers to their designated college (plus all published papers)
+      if (isDean(currentUser) && currentUser.college) {
+        list = list.filter(r => {
+          const isPublished = (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished';
+          if (isPublished) return true;
+          return r.department === currentUser.college;
+        });
+      }
+      // If URELIA Director or Admin, they have unrestricted system-wide access to all unpublished research
+
+      // Filter by Publication Status for authorized Dean / Director / Admin
       if (filters.publicationStatus === 'published') {
         list = list.filter(r => (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished');
       } else if (filters.publicationStatus === 'unpublished') {

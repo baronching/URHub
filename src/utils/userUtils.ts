@@ -65,15 +65,15 @@ export function isFacultyAdmin(user?: User | null): boolean {
 // ROLE PERMISSION CHECKS (6 Authenticated Roles)
 // ==========================================
 
-// Students CANNOT view unpublished research; Chairs, Deans, & URELIA can
+// Only College Deans, URELIA Director, and URELIA Admin can access unpublished researches
 export function canViewUnpublished(user?: User | null): boolean {
-  if (!user || isStudent(user)) return false;
-  return true;
+  if (!user) return false;
+  return isDean(user) || isUreliaDirector(user) || isUreliaAdmin(user);
 }
 
 // Full PDF viewer access:
 // All students, faculty, and administrators have full PDF viewer access to any PUBLISHED research paper.
-// Unpublished manuscripts (pending review or rejected) are restricted to Program Chairs, Deans, and URELIA.
+// Unpublished manuscripts (pending review or unpublished archive) are exclusively accessible by College Deans, URELIA Director, and URELIA Admin.
 export function canViewFullPaper(user?: User | null, paper?: any | null): boolean {
   if (paper) {
     const isPublished =
@@ -82,8 +82,8 @@ export function canViewFullPaper(user?: User | null, paper?: any | null): boolea
       (!paper.status && paper.status !== 'pending' && paper.status !== 'rejected');
     if (isPublished) return true;
   }
-  if (!user || isStudent(user)) return false;
-  return isProgramChair(user) || isDean(user) || isUrelia(user);
+  if (!user) return false;
+  return isDean(user) || isUreliaDirector(user) || isUreliaAdmin(user);
 }
 
 // Final Archive & Publish approval is exclusively reserved for URELIA (Director / Admin)
