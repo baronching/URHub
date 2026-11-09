@@ -1215,30 +1215,10 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 flex items-center space-x-3 hover:border-[#1a4731]/40 transition-colors">
                     <div className="w-9 h-9 rounded-lg bg-[#1a4731] text-[#c9a84c] font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                      BC
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-bold text-slate-800 truncate">Baron Alijah L. Ching</div>
-                      <div className="text-[11px] text-slate-500 font-medium truncate">Capstone Researcher & Developer</div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 flex items-center space-x-3 hover:border-[#1a4731]/40 transition-colors">
-                    <div className="w-9 h-9 rounded-lg bg-[#1a4731] text-[#c9a84c] font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                      AA
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-bold text-slate-800 truncate">Alexis Bryan Apuyan</div>
-                      <div className="text-[11px] text-slate-500 font-medium truncate">Capstone Researcher & Developer</div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 flex items-center space-x-3 hover:border-[#1a4731]/40 transition-colors">
-                    <div className="w-9 h-9 rounded-lg bg-[#1a4731] text-[#c9a84c] font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
                       MT
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-800 truncate">Maria Aylassa Tumlos</div>
+                      <div className="font-bold text-slate-800 truncate" title="Ma. Aylassa Kyl L. Tumlos">Ma. Aylassa Kyl L. Tumlos</div>
                       <div className="text-[11px] text-slate-500 font-medium truncate">Capstone Researcher & Developer</div>
                     </div>
                   </div>
@@ -1248,7 +1228,27 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                       JP
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-800 truncate">JhonLeo Pangilinan</div>
+                      <div className="font-bold text-slate-800 truncate" title="Jhon-Leo S. Pangilinan">Jhon-Leo S. Pangilinan</div>
+                      <div className="text-[11px] text-slate-500 font-medium truncate">Capstone Researcher & Developer</div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 flex items-center space-x-3 hover:border-[#1a4731]/40 transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-[#1a4731] text-[#c9a84c] font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                      AA
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-800 truncate" title="Alexis Bryan M. Apuyan">Alexis Bryan M. Apuyan</div>
+                      <div className="text-[11px] text-slate-500 font-medium truncate">Capstone Researcher & Developer</div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 flex items-center space-x-3 hover:border-[#1a4731]/40 transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-[#1a4731] text-[#c9a84c] font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                      BC
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-800 truncate" title="Baron Alijah L. Ching">Baron Alijah L. Ching</div>
                       <div className="text-[11px] text-slate-500 font-medium truncate">Capstone Researcher & Developer</div>
                     </div>
                   </div>
@@ -1286,7 +1286,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
               <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 text-xs text-emerald-950 flex items-start gap-2.5">
                 <Sparkles className="w-4 h-4 text-[#c9a84c] shrink-0 mt-0.5" />
                 <div className="leading-relaxed">
-                  <span className="font-bold text-[#1a4731]">By Baron Alijah L. Ching, Alexis Bryan Apuyan, Maria Aylassa Tumlos, and JhonLeo Pangilinan. </span>
+                  <span className="font-bold text-[#1a4731]">By Ma. Aylassa Kyl L. Tumlos, Jhon-Leo S. Pangilinan, Alexis Bryan M. Apuyan, and Baron Alijah L. Ching. </span>
                   Dedicated to the students, faculty researchers, Program Chairs, Deans, and the URELIA Directorate of Universidad de Manila.
                 </div>
               </div>
