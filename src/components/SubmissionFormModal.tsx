@@ -3,6 +3,7 @@ import { UDMCollege, UDM_COLLEGES, User, Submission, PublicationType } from '../
 import { createSubmission } from '../services/supabaseService';
 import { canSubmitResearch, isProgramChair, isUrelia, isUreliaPersonnel } from '../utils/userUtils';
 import { calculateTitleSimilarity, generateDocumentNumber } from '../utils/titleIntegrity';
+import { saveOriginalPdf } from '../utils/pdfStorage';
 import {
   X,
   Upload,
@@ -65,6 +66,7 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
   const [publisherDetails, setPublisherDetails] = useState('');
 
   // 2. Uploaded PDF State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string>('');
   const [pdfFileSize, setPdfFileSize] = useState<string>('');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string>('');
@@ -139,6 +141,7 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
         return;
       }
       setErrorMsg('');
+      setSelectedFile(file);
       setPdfFileName(file.name);
       setPdfFileSize(`${(file.size / (1024 * 1024)).toFixed(2)} MB`);
 
@@ -315,6 +318,37 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
         pdfFileName: pdfFileName || 'research_manuscript.pdf',
         authorCategory: isChair || isUreliaStaff ? 'Faculty_Admin' : 'Student'
       };
+
+      // Save original uploaded PDF file to IndexedDB & Server Storage
+      if (selectedFile) {
+        try {
+          await saveOriginalPdf(newSubmission.submissionID, selectedFile);
+          await saveOriginalPdf(newSubmission.researchID, selectedFile);
+          if (pdfFileName) await saveOriginalPdf(pdfFileName, selectedFile);
+          if (documentNumber) await saveOriginalPdf(documentNumber, selectedFile);
+
+          const reader = new FileReader();
+          reader.onload = async () => {
+            try {
+              const base64 = (reader.result as string).split(',')[1];
+              await fetch('/api/upload-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fileName: pdfFileName || 'manuscript.pdf',
+                  researchId: newSubmission.researchID,
+                  fileBase64: base64
+                })
+              });
+            } catch (upErr) {
+              console.warn('PDF server upload note:', upErr);
+            }
+          };
+          reader.readAsDataURL(selectedFile);
+        } catch (storageErr) {
+          console.warn('PDF local cache note:', storageErr);
+        }
+      }
 
       // Backend API validation
       try {

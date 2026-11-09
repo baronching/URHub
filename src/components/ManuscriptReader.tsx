@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Research, UDM_COLLEGES } from '../types';
 import jsPDF from 'jspdf';
+import { getOriginalPdfUrl } from '../utils/pdfStorage';
 import {
   Download,
   ExternalLink,
@@ -25,22 +26,87 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
   onDownloadAbstract
 }) => {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string>('');
+  const [originalBlobUrl, setOriginalBlobUrl] = useState<string>('');
+  const [serverPdfAvailable, setServerPdfAvailable] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
 
-  // Normalize Google Drive or external PDF URLs for seamless iframe embedding
+  // Look for the original uploaded manuscript file in IndexedDB
+  useEffect(() => {
+    let active = true;
+    const candidateKeys = [
+      research.researchID,
+      research.documentNumber,
+      research.fullPdfUrl?.replace('/uploads/', ''),
+      research.title
+    ];
+
+    getOriginalPdfUrl(candidateKeys).then(url => {
+      if (active && url) {
+        setOriginalBlobUrl(url);
+      }
+    });
+
+    return () => {
+      active = false;
+      if (originalBlobUrl && originalBlobUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(originalBlobUrl);
+      }
+    };
+  }, [research.researchID, research.documentNumber, research.fullPdfUrl]);
+
+  // Check if a relative /uploads/ server URL actually exists and is a PDF
+  useEffect(() => {
+    let active = true;
+    if (research.fullPdfUrl && research.fullPdfUrl.startsWith('/uploads/')) {
+      fetch(research.fullPdfUrl, { method: 'HEAD' })
+        .then(res => {
+          if (active) {
+            const isPdf = res.ok && (res.headers.get('content-type')?.includes('pdf') || false);
+            setServerPdfAvailable(isPdf);
+          }
+        })
+        .catch(() => {
+          if (active) setServerPdfAvailable(false);
+        });
+    } else {
+      setServerPdfAvailable(false);
+    }
+    return () => { active = false; };
+  }, [research.fullPdfUrl]);
+
+  // Determine the verified submitted PDF URL
   const submittedEmbedUrl = useMemo(() => {
-    if (!research.fullPdfUrl || research.fullPdfUrl.startsWith('/uploads/mock')) return '';
-    let url = research.fullPdfUrl.trim();
-    if (url.includes('drive.google.com/file/d/')) {
-      const match = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    // 1. Exact original PDF file uploaded by the user in this browser
+    if (originalBlobUrl) {
+      return originalBlobUrl;
+    }
+
+    if (!research.fullPdfUrl) return '';
+    const rawUrl = research.fullPdfUrl.trim();
+
+    // 2. Google Drive preview URL
+    if (rawUrl.includes('drive.google.com/file/d/')) {
+      const match = rawUrl.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
         return `https://drive.google.com/file/d/${match[1]}/preview`;
       }
-      return url.replace(/\/view(\?.*)?$/, '/preview');
+      return rawUrl.replace(/\/view(\?.*)?$/, '/preview');
     }
-    return url;
-  }, [research.fullPdfUrl]);
+
+    // 3. Absolute http / https / blob URL
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:')) {
+      return rawUrl;
+    }
+
+    // 4. Server-hosted /uploads/ file ONLY if verified to exist as PDF
+    if (rawUrl.startsWith('/uploads/') && serverPdfAvailable) {
+      return rawUrl;
+    }
+
+    // Never return an unverified relative URL that would trigger SPA index.html fallback!
+    return '';
+  }, [originalBlobUrl, research.fullPdfUrl, serverPdfAvailable]);
 
   const hasSubmittedUrl = Boolean(submittedEmbedUrl);
 
@@ -411,7 +477,9 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
             <h4 className="font-bold text-[#1a4731] text-xs sm:text-sm flex items-center space-x-1.5">
               <span>Full Manuscript PDF Reader</span>
               <span className="px-2 py-0.5 rounded-full text-[9px] bg-emerald-100 text-emerald-800 font-extrabold uppercase">
-                {activeView === 'submitted' ? 'Published Journal PDF' : 'Institutional Archive PDF'}
+                {activeView === 'submitted'
+                  ? (originalBlobUrl ? 'Original Uploaded PDF' : 'Original Journal PDF')
+                  : 'Institutional Archive PDF'}
               </span>
             </h4>
             <p className="text-slate-600 text-[11px]">
@@ -432,9 +500,9 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
                     ? 'bg-[#1a4731] text-white shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title="View original submitted journal publication"
+                title="View original submitted manuscript file"
               >
-                Journal PDF
+                {originalBlobUrl ? 'Original PDF' : 'Journal PDF'}
               </button>
               <button
                 type="button"

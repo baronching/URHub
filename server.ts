@@ -7,6 +7,7 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
 import { INITIAL_RESEARCH, INITIAL_SUBMISSIONS, INITIAL_SYSTEM_SETTINGS, INITIAL_USERS } from './src/data/mockDatabase';
 import { generateHybridRecommendations, calculateIDF, getResearchTokens, scoreSearchRelevance } from './src/utils/mlEngine';
@@ -51,6 +52,49 @@ const ai = new GoogleGenAI({
 
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+// Static PDF Uploads Storage Directory
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Serve uploaded manuscript PDFs with strict PDF headers
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+    }
+  }
+}));
+
+// If an upload is missing, return 404 text instead of falling through to SPA HTML
+app.use('/uploads', (req: Request, res: Response, next: any) => {
+  if (req.path !== '/') {
+    return res.status(404).type('text/plain').send('PDF manuscript file not found.');
+  }
+  next();
+});
+
+// Route to handle direct PDF manuscript uploads
+app.post('/api/upload-pdf', (req: Request, res: Response) => {
+  try {
+    const { fileName, fileBase64, researchId } = req.body;
+    if (!fileName || !fileBase64) {
+      return res.status(400).json({ error: 'fileName and fileBase64 are required.' });
+    }
+    const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safeName = researchId ? `${researchId}_${cleanName}` : cleanName;
+    const targetPath = path.join(uploadsDir, safeName);
+    const buffer = Buffer.from(fileBase64, 'base64');
+    fs.writeFileSync(targetPath, buffer);
+    console.log(`[Uploads] Saved PDF manuscript: ${safeName} (${buffer.length} bytes)`);
+    return res.status(200).json({ success: true, url: `/uploads/${safeName}`, fileName: safeName });
+  } catch (err: any) {
+    console.error('[Uploads] Error saving PDF:', err);
+    return res.status(500).json({ error: err.message || 'Failed to save PDF' });
+  }
+});
 
 // In-Memory Database instances initialized from seed data
 let usersDB: User[] = [...INITIAL_USERS];
@@ -1277,7 +1321,7 @@ async function startServer() {
       if (viteMiddleware) {
         return viteMiddleware(req, res, next);
       }
-      if (req.path.startsWith('/api')) {
+      if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
         return next();
       }
       const startTime = Date.now();
