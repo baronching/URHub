@@ -24,7 +24,12 @@ export function isProgramChair(user?: User | null): boolean {
 
 export function isDean(user?: User | null): boolean {
   if (!user) return false;
-  return user.role === 'dean';
+  return (
+    user.role === 'dean' ||
+    user.userType === 'Dean' ||
+    Boolean(user.email && /dean/i.test(user.email)) ||
+    Boolean(user.courseProgram && /dean/i.test(user.courseProgram))
+  );
 }
 
 export function isUreliaPersonnel(user?: User | null): boolean {
@@ -34,12 +39,23 @@ export function isUreliaPersonnel(user?: User | null): boolean {
 
 export function isUreliaDirector(user?: User | null): boolean {
   if (!user) return false;
-  return user.role === 'urelia_director' || (user.role === 'admin' && Boolean(user.email?.toLowerCase().includes('director')));
+  return (
+    user.role === 'urelia_director' ||
+    user.role === 'director' ||
+    Boolean(user.email && /director/i.test(user.email)) ||
+    Boolean(user.name && /director/i.test(user.name)) ||
+    Boolean(user.courseProgram && /director/i.test(user.courseProgram))
+  );
 }
 
 export function isUreliaAdmin(user?: User | null): boolean {
   if (!user) return false;
-  return user.role === 'urelia_admin' || user.role === 'super_admin';
+  return (
+    user.role === 'urelia_admin' ||
+    user.role === 'super_admin' ||
+    user.role === 'admin' ||
+    Boolean(user.email && /(admin|sysadmin)/i.test(user.email))
+  );
 }
 
 // URELIA Office Staff (Personnel, Director, or Admin)

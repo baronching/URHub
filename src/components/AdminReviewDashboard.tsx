@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Submission, User, UDM_COLLEGES } from '../types';
+import { Submission, User, UDM_COLLEGES, Research } from '../types';
 import {
   isDean,
   isProgramChair,
@@ -28,7 +28,8 @@ import {
   Calendar,
   Building2,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  BookOpen
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -40,6 +41,7 @@ interface AdminReviewDashboardProps {
   onEndorseSubmission?: (submissionID: string, comments: string) => Promise<void>;
   onRequestRevision?: (submissionID: string, reason: string) => Promise<void>;
   onReviewAccessRequest?: (requestID: string, status: 'approved' | 'rejected', reviewNote: string) => Promise<void>;
+  onOpenResearch?: (research: Research, initialTab?: 'abstract' | 'full_paper') => void;
 }
 
 export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
@@ -47,13 +49,39 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
   submissions,
   onReviewSubmission,
   onEndorseSubmission,
-  onRequestRevision
+  onRequestRevision,
+  onOpenResearch
 }) => {
   const isDeanUser = isDean(currentUser);
   const isChairUser = isProgramChair(currentUser);
   const isUreliaUser = isUrelia(currentUser);
   const isPersonnelUser = isUreliaPersonnel(currentUser);
   const canApproveReject = canApproveOrRejectSubmissions(currentUser);
+
+  // Helper to convert Submission into Research format for full reader modal
+  const convertSubmissionToResearch = (sub: Submission): Research => {
+    return {
+      researchID: sub.researchID || sub.submissionID,
+      title: sub.title,
+      abstract: sub.abstract,
+      authors: sub.authors && sub.authors.length > 0 ? sub.authors : [sub.submitterName || 'UDM Researcher'],
+      keywords: sub.keywords && sub.keywords.length > 0 ? sub.keywords : ['Academic Capstone', 'UDM Research'],
+      department: sub.department,
+      course: sub.course,
+      year: sub.year || 2026,
+      status: sub.status || 'pending',
+      publicationType: sub.publicationType || 'unpublished',
+      documentNumber: sub.documentNumber,
+      version: sub.version || 'v1.0',
+      viewsCount: 0,
+      downloadsCount: 0,
+      submittedBy: sub.submittedBy,
+      dateAdded: sub.dateSubmitted,
+      fullPdfUrl: sub.pdfFileName ? `/uploads/${sub.pdfFileName}` : undefined,
+      authorCategory: sub.authorCategory,
+      publicationProof: sub.publicationProof
+    };
+  };
 
   // Submissions filtered by role authority scope:
   // - Dean: strictly their designated college
@@ -517,15 +545,28 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                   )}
                 </div>
 
-                {/* Action Trigger */}
-                <div className="shrink-0 flex md:flex-col items-end justify-center">
+                {/* Action Triggers */}
+                <div className="shrink-0 flex flex-wrap md:flex-col items-end justify-center gap-2">
+                  {onOpenResearch && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenResearch(convertSubmissionToResearch(sub), 'full_paper')}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                      title="Open full embedded manuscript PDF reader"
+                    >
+                      <BookOpen className="w-4 h-4 text-[#c9a84c]" />
+                      <span>Read Full PDF</span>
+                    </button>
+                  )}
+
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedSubmission(sub);
                       setReviewNote('');
                       setOverrideTitleMismatch(false);
                     }}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-sm flex items-center space-x-1.5 cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-[#1a4731] border border-[#1a4731]/40 shadow-xs flex items-center space-x-1.5 cursor-pointer"
                   >
                     <CheckSquare className="w-4 h-4 text-[#c9a84c]" />
                     <span>
@@ -585,13 +626,28 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
 
             {/* Document Readers / Actions */}
             <div className="flex flex-wrap items-center gap-2.5">
+              {onOpenResearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const resObj = convertSubmissionToResearch(selectedSubmission);
+                    setSelectedSubmission(null);
+                    onOpenResearch(resObj, 'full_paper');
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-[#c9a84c]" />
+                  <span>Open Full PDF Reader</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => handleViewFullDocumentInNewTab(selectedSubmission)}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-[#1a4731] border border-[#1a4731]/40 shadow-2xs flex items-center space-x-1.5 cursor-pointer"
               >
                 <FileText className="w-3.5 h-3.5 text-[#1a4731]" />
-                <span>Read Full Manuscript (New Tab)</span>
+                <span>Read in New Tab</span>
                 <ExternalLink className="w-3 h-3 text-[#1a4731]" />
               </button>
 

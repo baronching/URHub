@@ -91,9 +91,11 @@ export default function App() {
     sortBy: 'relevance'
   });
 
-  // Enforce access control: Students can only view Published papers; reset status filter on logout or student login
+  // Adjust publication status when user changes: Dean/Director/Admin get ALL (published + unpublished)
   useEffect(() => {
-    if (!canViewUnpublished(currentUser) && filters.publicationStatus !== 'published') {
+    if (canViewUnpublished(currentUser)) {
+      setFilters(prev => ({ ...prev, publicationStatus: 'ALL' }));
+    } else {
       setFilters(prev => ({ ...prev, publicationStatus: 'published' }));
     }
   }, [currentUser]);
@@ -1173,6 +1175,7 @@ export default function App() {
             onEndorseSubmission={handleEndorseSubmission}
             onRequestRevision={handleRequestRevision}
             onReviewAccessRequest={handleReviewAccessRequest}
+            onOpenResearch={(research, tab) => handleSelectResearch(research, tab || 'full_paper')}
           />
         )}
 

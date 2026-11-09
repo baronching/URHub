@@ -525,7 +525,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center space-x-2 shrink-0">
-                  {isPublishedPaper && (
+                  {canAccessFullPaper && (
                     <button
                       onClick={() => setActiveTab('full_paper')}
                       className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-xs inline-flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
