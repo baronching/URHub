@@ -31,6 +31,9 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   const handlePublicationStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     if (!canViewUnpublished(currentUser) && (val === 'unpublished' || val === 'ALL')) {
+      if (onOpenAuthModal) {
+        onOpenAuthModal();
+      }
       return;
     }
     onChangeFilters({
@@ -147,8 +150,8 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                   <option value="ALL">All Status (Published & Unpublished)</option>
                 </>
               ) : (
-                <option value="unpublished" disabled>
-                  Unpublished (Dean / Director / Admin Only 🔒)
+                <option value="unpublished">
+                  Unpublished (Sign In as Dean / Director / Admin)
                 </option>
               )}
             </select>

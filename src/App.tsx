@@ -923,6 +923,8 @@ export default function App() {
                 onChangeFilters={setFilters}
                 availableKeywords={availableKeywords}
                 totalResults={filteredResearchList.length}
+                currentUser={currentUser}
+                onOpenAuthModal={() => setShowAuthModal(true)}
               />
             </div>
 
