@@ -54,9 +54,23 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Static PDF Uploads Storage Directory
-const uploadsDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const isServerlessEnv = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT
+);
+
+const uploadsDir = isServerlessEnv
+  ? path.join('/tmp', 'uploads')
+  : path.join(process.cwd(), 'uploads');
+
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e: any) {
+  console.warn('[Uploads Directory] Non-fatal init note:', e?.message || e);
 }
 
 // Serve uploaded manuscript PDFs with strict PDF headers
@@ -102,15 +116,29 @@ let researchDB: Research[] = [...INITIAL_RESEARCH];
 let submissionsDB: Submission[] = [...INITIAL_SUBMISSIONS];
 let settingsDB: SystemSettings = { ...INITIAL_SYSTEM_SETTINGS };
 
-// Hostinger SMTP Transporter Configuration
-const getHostingerTransporter = () => {
-  const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
+// Unified SMTP Transporter Configuration (Hostinger & Gmail Support)
+const getSmtpTransporter = () => {
+  // 1. Gmail credentials if configured
+  const gmailUser = (process.env.GMAIL_USER || process.env.GOOGLE_EMAIL_USER || '').trim();
+  const gmailPass = (process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GOOGLE_APP_PASSWORD || '').trim();
+
+  // 2. Generic / Hostinger credentials
+  const host = (process.env.SMTP_HOST || (gmailUser ? 'smtp.gmail.com' : 'smtp.hostinger.com')).trim();
   const port = Number(process.env.SMTP_PORT) || 465;
-  const user = process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER || '';
-  const pass = process.env.SMTP_PASS || process.env.HOSTINGER_EMAIL_PASS || '';
+  const user = (process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER || gmailUser || 'blching@udmrhub.site').trim();
+  const pass = (process.env.SMTP_PASS || process.env.HOSTINGER_EMAIL_PASS || gmailPass || 'Default270319.').trim();
 
   if (!user || !pass) {
     return null;
+  }
+
+  const isGmail = host.includes('gmail.com') || user.endsWith('@gmail.com');
+
+  if (isGmail) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user, pass }
+    });
   }
 
   return nodemailer.createTransport({
@@ -191,21 +219,21 @@ setInterval(() => {
   });
 }, 5 * 60 * 1000);
 
-// Send 6-Digit Numeric Verification OTP via Hostinger SMTP
+// Send 6-Digit Numeric Verification OTP via SMTP (Hostinger or Gmail)
 async function sendNumericOTPEmail(toEmail: string, fullName: string, otpCode: string): Promise<boolean> {
-  const transporter = getHostingerTransporter();
+  const transporter = getSmtpTransporter();
   console.log(`\n================================================================`);
   console.log(`[UDM OTP] Registration Verification for: ${toEmail}`);
   console.log(`[UDM OTP] 6-DIGIT NUMERIC CODE (NUMBERS ONLY): >>> [ ${otpCode} ] <<<`);
   console.log(`================================================================\n`);
 
   if (!transporter) {
-    console.warn(`[UDM OTP] Hostinger SMTP credentials not set. Code [ ${otpCode} ] logged to console for test/dev.`);
+    console.warn(`[UDM OTP] SMTP credentials not set. Code [ ${otpCode} ] logged to console for test/dev.`);
     return false;
   }
 
   try {
-    const sender = process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER || 'no-reply@udmrhub.site';
+    const sender = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.HOSTINGER_EMAIL_USER || 'blching@udmrhub.site';
     await transporter.sendMail({
       from: `"${process.env.SMTP_FROM_NAME || 'UDM ResearchHub - URELIA'}" <${sender}>`,
       to: toEmail,
@@ -248,56 +276,51 @@ async function sendNumericOTPEmail(toEmail: string, fullName: string, otpCode: s
 // RESTFUL API ENDPOINTS
 // ==========================================
 
-// Health Check & Hostinger SMTP Status
+// Health Check & SMTP Status
 app.get('/api/health', (req: Request, res: Response) => {
-  const isSmtpConfigured = Boolean(
-    (process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER) &&
-    (process.env.SMTP_PASS || process.env.HOSTINGER_EMAIL_PASS)
-  );
+  const transporter = getSmtpTransporter();
 
   res.json({
     status: 'online',
     system: 'UDM-ResearchHub API',
     institution: 'Universidad de Manila - URELIA Office',
     smtp: {
-      provider: 'Hostinger SMTP (smtp.hostinger.com)',
-      configured: isSmtpConfigured,
-      sender: process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER || 'Not configured yet'
+      provider: 'SMTP (Hostinger / Gmail)',
+      configured: Boolean(transporter),
+      sender: process.env.SMTP_USER || process.env.GMAIL_USER || process.env.HOSTINGER_EMAIL_USER || 'blching@udmrhub.site'
     },
     timestamp: new Date().toISOString()
   });
 });
 
-// Test Hostinger SMTP Connection / Send Test Email
+// Test SMTP Connection / Send Test Email
 app.post('/api/smtp/test', async (req: Request, res: Response) => {
   const { toEmail } = req.body;
-  const transporter = getHostingerTransporter();
+  const transporter = getSmtpTransporter();
 
   if (!transporter) {
     return res.status(400).json({
       success: false,
-      error: 'Hostinger SMTP is not yet configured. Please set SMTP_USER and SMTP_PASS in environment variables.'
+      error: 'SMTP is not yet configured. Please set SMTP_USER and SMTP_PASS (or GMAIL_USER and GMAIL_PASS).'
     });
   }
 
-  const targetEmail = toEmail || process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER;
+  const targetEmail = toEmail || process.env.SMTP_USER || process.env.GMAIL_USER || 'blching@udmrhub.site';
 
   try {
-    // 1. Verify credentials with smtp.hostinger.com
     await transporter.verify();
 
-    // 2. Send test message
     const info = await transporter.sendMail({
-      from: `"${process.env.SMTP_FROM_NAME || 'UDM ResearchHub'}" <${process.env.SMTP_USER || process.env.HOSTINGER_EMAIL_USER}>`,
+      from: `"${process.env.SMTP_FROM_NAME || 'UDM ResearchHub'}" <${process.env.SMTP_USER || process.env.GMAIL_USER || 'blching@udmrhub.site'}>`,
       to: targetEmail,
-      subject: 'UDM-ResearchHub Hostinger SMTP Connection Verified',
+      subject: 'UDM-ResearchHub SMTP Connection Verified',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f8fafc; border-radius: 10px;">
           <h2 style="color: #1a4731; margin-top: 0;">Universidad de Manila - URELIA ResearchHub</h2>
-          <p>This is a confirmation that your <strong>Hostinger SMTP</strong> email server (<code>smtp.hostinger.com</code>) is successfully connected to UDM-ResearchHub!</p>
+          <p>This is a confirmation that your SMTP email server is successfully connected to UDM-ResearchHub!</p>
           <div style="padding: 12px; background-color: #e6f4ea; border-left: 4px solid #1a4731; border-radius: 4px; margin: 15px 0;">
             <p style="margin: 0; color: #1a4731; font-weight: bold;">Status: Active & Operational</p>
-            <p style="margin: 5px 0 0 0; font-size: 13px; color: #374151;">All institutional student and faculty verification codes will be delivered through this channel.</p>
+            <p style="margin: 5px 0 0 0; font-size: 13px; color: #374151;">All student and faculty verification codes will be delivered through this channel.</p>
           </div>
           <p style="font-size: 12px; color: #6b7280;">Universidad de Manila • Research and Extension Services Office (URELIA)</p>
         </div>
@@ -306,14 +329,14 @@ app.post('/api/smtp/test', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: `Test email successfully sent to ${targetEmail} via Hostinger SMTP!`,
+      message: `Test email successfully sent to ${targetEmail} via SMTP!`,
       messageId: info.messageId
     });
   } catch (err: any) {
-    console.error('Hostinger SMTP Test Error:', err);
+    console.error('SMTP Test Error:', err);
     res.status(500).json({
       success: false,
-      error: err.message || 'Hostinger SMTP authentication or connection failed'
+      error: err.message || 'SMTP authentication or connection failed'
     });
   }
 });

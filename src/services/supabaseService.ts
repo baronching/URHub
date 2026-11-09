@@ -733,6 +733,18 @@ export interface RegisterResult {
   otpCode?: string;
 }
 
+async function parseResponseJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (!res.ok) {
+      throw new Error(`Server error (${res.status}): Please check backend logs or try again.`);
+    }
+    throw new Error('Unexpected response format received from authentication server.');
+  }
+}
+
 export async function registerUserWithSupabase(data: RegisterPayload): Promise<RegisterResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
 
@@ -769,7 +781,7 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
     throw new Error('An account with this email is already registered. Please proceed to the Sign In tab to log in.');
   }
 
-  // Send registration data and dispatch strictly 6-digit numeric OTP via backend Hostinger SMTP
+  // Send registration data and dispatch strictly 6-digit numeric OTP via backend SMTP
   // The account will ONLY be created in Supabase AFTER the user submits the correct OTP!
   const res = await fetch('/api/auth/send-verification-otp', {
     method: 'POST',
@@ -786,7 +798,7 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
     })
   });
 
-  const result = await res.json();
+  const result = await parseResponseJson(res);
   if (!res.ok) {
     throw new Error(result.error || 'Failed to dispatch verification code. Please check your network and try again.');
   }
@@ -836,7 +848,7 @@ export async function verifySignupOTP(email: string, tokenOrHash: string): Promi
     body: JSON.stringify({ email: cleanEmail, otpCode: cleanToken })
   });
 
-  const result = await res.json();
+  const result = await parseResponseJson(res);
   if (!res.ok || !result.success || !result.user) {
     throw new Error(result.error || 'Incorrect or expired 6-digit verification code. Please check your email and try again.');
   }
@@ -864,7 +876,7 @@ export async function resendSignupOTP(email: string): Promise<void> {
     body: JSON.stringify({ email: cleanEmail })
   });
 
-  const result = await res.json();
+  const result = await parseResponseJson(res);
   if (!res.ok) {
     throw new Error(result.error || 'Failed to resend verification code. Please check your details and try again.');
   }
