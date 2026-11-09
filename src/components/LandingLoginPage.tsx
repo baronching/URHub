@@ -98,7 +98,6 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [cachedOtp, setCachedOtp] = useState('');
-  const [instantActivate, setInstantActivate] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Sync cached OTP from sessionStorage if available
@@ -198,13 +197,6 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         yearLevel: userRole === 'student' ? yearLevel : undefined
       });
 
-      if (instantActivate) {
-        // Direct Entry: auto-activate and enter immediately
-        const verifiedUser = await verifySignupOTP(cleanEmail, result.otpCode || '123456');
-        onLoginSuccess(verifiedUser);
-        return;
-      }
-
       if (result.needsVerification) {
         setPendingEmail(cleanEmail);
         if (result.otpCode) {
@@ -212,7 +204,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         }
         setAuthMode('verify_otp');
         setResendCooldown(60);
-        setSuccessMsg(`Account saved to Supabase! A 6-digit verification code has been dispatched. Enter it below or use the fast activation assistant.`);
+        setSuccessMsg(`A 6-digit verification code has been dispatched. Enter it below to activate your account.`);
       } else {
         onLoginSuccess(result.user);
       }
@@ -954,20 +946,6 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                         </button>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Instant Activation Checkbox */}
-                  <div className="flex items-start space-x-2.5 p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200">
-                    <input
-                      type="checkbox"
-                      id="landingInstantActivate"
-                      checked={instantActivate}
-                      onChange={e => setInstantActivate(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-[#1a4731] focus:ring-[#1a4731] cursor-pointer"
-                    />
-                    <label htmlFor="landingInstantActivate" className="text-[11px] text-emerald-950 select-none cursor-pointer leading-tight">
-                      <span className="font-bold text-[#1a4731]">Instant Direct Entry:</span> Automatically activate and log in right after registration without waiting for email delivery.
-                    </label>
                   </div>
 
                   {/* Submit Registration Button */}

@@ -86,7 +86,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
   // Verification & Forgot Password State
   const [otpCode, setOtpCode] = useState('');
   const [cachedOtp, setCachedOtp] = useState('');
-  const [instantActivate, setInstantActivate] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [pasteLinkInput, setPasteLinkInput] = useState('');
@@ -174,13 +173,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
           yearLevel: userType === 'student' ? yearLevel : undefined
         });
 
-        if (instantActivate) {
-          const verifiedUser = await verifySignupOTP(cleanEmail, result.otpCode || '123456');
-          onLoginSuccess(verifiedUser);
-          onClose();
-          return;
-        }
-
         if (result.needsVerification) {
           setPendingEmail(cleanEmail);
           if (result.otpCode) {
@@ -188,7 +180,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
           }
           setViewMode('verify_otp');
           setResendCooldown(60);
-          setSuccessMsg(`Account saved to Supabase! A 6-digit verification code has been dispatched. Enter it below or use the fast activation assistant.`);
+          setSuccessMsg(`A 6-digit verification code has been dispatched. Enter it below to activate your account.`);
         } else {
           onLoginSuccess(result.user);
           onClose();
@@ -624,29 +616,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                 )}
               </div>
 
-              {/* Institutional Direct Access Notice */}
+              {/* Institutional Registration Notice */}
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-950 space-y-1">
                 <p className="font-bold flex items-center gap-1.5 text-emerald-900">
                   <ShieldCheck className="w-4 h-4 text-[#1a4731]" />
                   <span>Institutional Supabase Registration:</span>
                 </p>
                 <p className="font-normal text-emerald-800 leading-relaxed">
-                  Your profile and institutional credentials will be saved directly to the database. You can activate immediately below.
+                  Enter your official UDM credentials. A 6-digit verification code will be sent to activate your account.
                 </p>
-              </div>
-
-              {/* Instant Direct Entry Option */}
-              <div className="flex items-start space-x-2.5 p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200">
-                <input
-                  type="checkbox"
-                  id="modalInstantActivate"
-                  checked={instantActivate}
-                  onChange={e => setInstantActivate(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-[#1a4731] focus:ring-[#1a4731] cursor-pointer"
-                />
-                <label htmlFor="modalInstantActivate" className="text-[11px] text-emerald-950 select-none cursor-pointer leading-tight">
-                  <span className="font-bold text-[#1a4731]">Instant Direct Entry:</span> Automatically activate account and log in immediately without waiting for email delivery.
-                </label>
               </div>
 
               {/* Submit Button */}
