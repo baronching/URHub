@@ -1122,66 +1122,100 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
 
   // 1. Try Supabase Auth first if password is provided
   if (isSupabaseConfigured && password && clean.includes('@')) {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: candidateEmail,
-        password
-      });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: candidateEmail,
+      password
+    });
 
-      if (error) {
-        // If Supabase reports email not confirmed, do not block: bypass and load profile
-        if (error.message.toLowerCase().includes('email not confirmed')) {
-          console.info('Bypassing email confirmation for @udm.edu.ph user:', candidateEmail);
-        } else if (error.message.toLowerCase().includes('invalid login credentials')) {
-          console.warn('Supabase signInWithPassword reported invalid credentials, checking database records...');
-        } else {
-          console.warn('Supabase signInWithPassword notice:', error.message);
+    if (error) {
+      const errMsg = error.message.toLowerCase();
+      // If email is not confirmed in Supabase, allow access only if credentials were valid
+      if (errMsg.includes('email not confirmed')) {
+        console.info('Bypassing email confirmation for @udm.edu.ph user:', candidateEmail);
+      } else if (errMsg.includes('invalid login credentials') || errMsg.includes('invalid credentials')) {
+        // Check if this is an in-memory or seed demo user with a known mock password
+        const demoUser = inMemoryUsers.find(u => u.email.toLowerCase() === candidateEmail) ||
+                         INITIAL_USERS.find(u => u.email.toLowerCase() === candidateEmail);
+        if (demoUser && demoUser.password) {
+          if (demoUser.password !== password) {
+            throw new Error('Invalid email or password. Please verify your credentials and try again.');
+          }
+          try {
+            localStorage.setItem('udm_active_user', JSON.stringify(demoUser));
+          } catch {}
+          return demoUser;
         }
+        // Wrong password for Supabase user: strictly reject!
+        throw new Error('Invalid email or password. Please verify your credentials and try again.');
+      } else {
+        throw new Error(error.message || 'Authentication failed. Please check your credentials.');
       }
+    }
 
-      if (data?.user) {
-        // Find user in Supabase table
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .or(`id.eq.${data.user.id},email.ilike.${candidateEmail}`)
-          .maybeSingle();
+    if (data?.user) {
+      // Find user in Supabase table
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .or(`id.eq.${data.user.id},email.ilike.${candidateEmail}`)
+        .maybeSingle();
 
-        const user: User = {
-          userID: profile?.id || data.user.id,
-          name: profile?.name || profile?.full_name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
-          fullName: profile?.full_name || profile?.name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
-          email: profile?.email || data.user.email || candidateEmail,
-          role: profile?.role || 'student_faculty',
-          userType: profile?.user_type || data.user.user_metadata?.user_type || 'Student',
-          college: profile?.college || data.user.user_metadata?.college || 'CCS',
-          idNumber: profile?.id_number || data.user.user_metadata?.id_number || '',
-          courseProgram: profile?.course_program || data.user.user_metadata?.course_program || '',
-          readingHistory: profile?.reading_history || []
-        };
-        try {
-          localStorage.setItem('udm_active_user', JSON.stringify(user));
-        } catch {}
-        return user;
-      }
-    } catch (authErr: any) {
-      if (authErr.message?.includes('Invalid email or password') || authErr.message?.includes('Access Denied')) {
-        throw authErr;
-      }
-      console.warn('Supabase Auth signInWithPassword error, checking database records:', authErr);
+      const user: User = {
+        userID: profile?.id || data.user.id,
+        name: profile?.name || profile?.full_name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
+        fullName: profile?.full_name || profile?.name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
+        email: profile?.email || data.user.email || candidateEmail,
+        role: profile?.role || 'student_faculty',
+        userType: profile?.user_type || data.user.user_metadata?.user_type || 'Student',
+        college: profile?.college || data.user.user_metadata?.college || 'CCS',
+        idNumber: profile?.id_number || data.user.user_metadata?.id_number || '',
+        courseProgram: profile?.course_program || data.user.user_metadata?.course_program || '',
+        readingHistory: profile?.reading_history || []
+      };
+      try {
+        localStorage.setItem('udm_active_user', JSON.stringify(user));
+      } catch {}
+      return user;
     }
   }
 
-  // 2. Query Supabase users table directly by candidateEmail, id_number, or exact id
-  if (isSupabaseConfigured) {
+  // 2. Check in-memory demo / seed users with strict password check
+  const found = inMemoryUsers.find(u => 
+    u.email.toLowerCase() === candidateEmail ||
+    u.email.toLowerCase() === clean ||
+    (u.idNumber && u.idNumber.toLowerCase() === raw.toLowerCase()) ||
+    u.userID === raw
+  ) || INITIAL_USERS.find(u => 
+    u.email.toLowerCase() === candidateEmail ||
+    u.email.toLowerCase() === clean ||
+    u.userID === raw
+  );
+
+  if (found) {
+    if (password && found.password && found.password !== password) {
+      throw new Error('Invalid email or password. Please verify your credentials and try again.');
+    }
     try {
-      const { data: profile, error: dbErr } = await supabase
+      localStorage.setItem('udm_active_user', JSON.stringify(found));
+    } catch {}
+    return found;
+  }
+
+  // If password was supplied but auth failed, strictly reject!
+  if (password) {
+    throw new Error('Invalid email or password. Please verify your credentials and try again.');
+  }
+
+  // 3. Passwordless session lookup by ID (only when password is not supplied)
+  if (isSupabaseConfigured && !password) {
+    try {
+      const { data: profile } = await supabase
         .from('users')
         .select('*')
         .or(`email.ilike.${candidateEmail},id_number.eq.${raw},id.eq.${raw}`)
         .maybeSingle();
 
-      if (!dbErr && profile) {
+      if (profile) {
         const user: User = {
           userID: profile.id,
           name: profile.name || profile.full_name || profile.email?.split('@')[0] || raw,
@@ -1202,25 +1236,6 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
     } catch (dbErr) {
       console.warn('Supabase users query error:', dbErr);
     }
-  }
-
-  // 3. Fallback to in-memory users / initial seed users
-  const found = inMemoryUsers.find(u => 
-    u.email.toLowerCase() === candidateEmail ||
-    u.email.toLowerCase() === clean ||
-    (u.idNumber && u.idNumber.toLowerCase() === raw.toLowerCase()) ||
-    u.userID === raw
-  ) || INITIAL_USERS.find(u => 
-    u.email.toLowerCase() === candidateEmail ||
-    u.email.toLowerCase() === clean ||
-    u.userID === raw
-  );
-
-  if (found) {
-    try {
-      localStorage.setItem('udm_active_user', JSON.stringify(found));
-    } catch {}
-    return found;
   }
 
   throw new Error(`Account "${raw}" not found. Please register and confirm your account using your @udm.edu.ph or @gmail.com email.`);
