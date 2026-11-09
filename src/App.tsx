@@ -40,6 +40,8 @@ import {
   isUrelia,
   isProgramChair,
   isDean,
+  isUreliaDirector,
+  isUreliaAdmin,
   canSubmitResearch,
   canViewUnpublished,
   canReviewSubmissions,
