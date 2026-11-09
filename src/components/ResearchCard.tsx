@@ -21,7 +21,7 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
   onToggleSelect
 }) => {
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
-  const isPublishedPaper = research.status === 'approved' || research.publicationType === 'published' || (!research.status && research.status !== 'pending' && research.status !== 'rejected');
+  const isPublishedPaper = research.publicationType !== 'unpublished' && (research.status === 'approved' || (!research.status && research.status !== 'pending' && research.status !== 'rejected'));
   const canReadPdf = isPublishedPaper || canViewUnpublished(currentUser);
 
   return (
@@ -70,17 +70,11 @@ export const ResearchCard: React.FC<ResearchCardProps> = ({
                 ? 'Faculty & Administration'
                 : collegeInfo?.name.replace('College of ', '') || research.department}
             </span>
-            {research.status === 'pending' && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
-                Unpublished
+            {research.publicationType === 'unpublished' ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
+                Unpublished Archive
               </span>
-            )}
-            {research.status === 'rejected' && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shrink-0">
-                Rejected
-              </span>
-            )}
-            {(research.status === 'approved' || (!research.status && research.status !== 'pending' && research.status !== 'rejected')) && (
+            ) : (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
                 Published
               </span>

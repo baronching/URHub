@@ -208,7 +208,7 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   if (!research) return null;
 
   const collegeInfo = UDM_COLLEGES.find(c => c.id === research.department);
-  const isPublishedPaper = research.status === 'approved' || research.publicationType === 'published' || (!research.status && research.status !== 'pending' && research.status !== 'rejected');
+  const isPublishedPaper = research.publicationType !== 'unpublished' && (research.status === 'approved' || (!research.status && research.status !== 'pending' && research.status !== 'rejected'));
   const canAccessFullPaper = isPublishedPaper || canViewFullPaper(currentUser, research);
 
   // Download Abstract as PDF using jsPDF

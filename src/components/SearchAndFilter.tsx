@@ -127,43 +127,40 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             </select>
           </div>
 
-          {/* Publication Status Dropdown (Published / Unpublished / All) */}
-          <div className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
-            {canViewUnpublished(currentUser) ? (
-              <BookOpen className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />
-            ) : (
-              <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-            )}
-            <span className="text-slate-500 font-medium shrink-0">Status:</span>
-            <select
-              value={!canViewUnpublished(currentUser) ? 'published' : (filters.publicationStatus || 'ALL')}
-              onChange={handlePublicationStatusChange}
-              disabled={!canViewUnpublished(currentUser)}
-              className={`bg-transparent text-slate-800 font-bold focus:outline-none ${
-                !canViewUnpublished(currentUser) ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
-              }`}
+          {/* Publication Status Control: Locked for 1, 2, 4; Fully Interactive for 3, 5, 6 */}
+          {!canViewUnpublished(currentUser) ? (
+            /* Roles 1 (Student), 2 (Chair), and 4 (Staff): Strictly NOT clickable, Published Only */
+            <div 
+              className="flex items-center space-x-1.5 bg-slate-100/90 px-3 py-1.5 rounded-lg border border-slate-200 select-none cursor-not-allowed opacity-90"
+              title="Published research only. Unpublished manuscripts are restricted to Dean, Director & Admin."
             >
-              <option value="published">Published</option>
-              {canViewUnpublished(currentUser) ? (
-                <>
-                  <option value="unpublished">Unpublished</option>
-                  <option value="ALL">All Status (Published & Unpublished)</option>
-                </>
-              ) : (
-                <option value="unpublished" disabled>
-                  Unpublished (Dean, Director & Admin Only 🔒)
-                </option>
-              )}
-            </select>
-            {!canViewUnpublished(currentUser) && (
-              <span
+              <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span className="text-slate-500 font-medium shrink-0">Status:</span>
+              <span className="text-slate-800 font-bold">Published</span>
+              <span 
                 className="text-[10px] text-amber-800 font-bold bg-amber-100/90 border border-amber-300 px-1.5 py-0.5 rounded ml-0.5 select-none"
                 title="Roles 1 (Student), 2 (Program Chair), and 4 (URELIA Staff) have no access to unpublished research"
               >
                 Published Only (No Access)
               </span>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* Roles 3 (Dean), 5 (Director), and 6 (Admin): Unlocked and fully clickable */
+            <div className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+              <BookOpen className="w-3.5 h-3.5 text-[#1a4731] shrink-0" />
+              <span className="text-slate-500 font-medium shrink-0">Status:</span>
+              <select
+                value={filters.publicationStatus || 'ALL'}
+                onChange={handlePublicationStatusChange}
+                className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
+                title="Filter by Publication Status (Published & Approved Unpublished)"
+              >
+                <option value="ALL">All Status (Published & Unpublished)</option>
+                <option value="published">Published</option>
+                <option value="unpublished">Unpublished (Approved Only)</option>
+              </select>
+            </div>
+          )}
 
           {/* Year Selector */}
           <div className="flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">

@@ -28,7 +28,9 @@ export function isDean(user?: User | null): boolean {
     user.role === 'dean' ||
     user.userType === 'Dean' ||
     Boolean(user.email && /dean/i.test(user.email)) ||
-    Boolean(user.courseProgram && /dean/i.test(user.courseProgram))
+    Boolean(user.courseProgram && /dean/i.test(user.courseProgram)) ||
+    Boolean(user.course && /dean/i.test(user.course)) ||
+    Boolean(user.name && /dean/i.test(user.name))
   );
 }
 
@@ -44,7 +46,8 @@ export function isUreliaDirector(user?: User | null): boolean {
     user.role === 'director' ||
     Boolean(user.email && /director/i.test(user.email)) ||
     Boolean(user.name && /director/i.test(user.name)) ||
-    Boolean(user.courseProgram && /director/i.test(user.courseProgram))
+    Boolean(user.courseProgram && /director/i.test(user.courseProgram)) ||
+    Boolean(user.course && /director/i.test(user.course))
   );
 }
 
@@ -81,9 +84,14 @@ export function isFacultyAdmin(user?: User | null): boolean {
 // ROLE PERMISSION CHECKS (6 Authenticated Roles)
 // ==========================================
 
-// Only College Deans, URELIA Director, and URELIA Admin can access unpublished researches
+// Only College Deans (3), URELIA Director (5), and URELIA Admin (6) can access unpublished researches
+// Roles 1 (Student), 2 (Program Chair), and 4 (URELIA Staff) have strictly NO ACCESS
 export function canViewUnpublished(user?: User | null): boolean {
   if (!user) return false;
+  // Explicitly deny roles 1, 2, and 4
+  if (user.role === 'student' || user.role === 'program_chair' || user.role === 'urelia_personnel') {
+    return false;
+  }
   return isDean(user) || isUreliaDirector(user) || isUreliaAdmin(user);
 }
 
@@ -93,13 +101,12 @@ export function canViewUnpublished(user?: User | null): boolean {
 export function canViewFullPaper(user?: User | null, paper?: any | null): boolean {
   if (paper) {
     const isPublished =
-      paper.status === 'approved' ||
-      paper.publicationType === 'published' ||
-      (!paper.status && paper.status !== 'pending' && paper.status !== 'rejected');
+      paper.publicationType !== 'unpublished' &&
+      (paper.status === 'approved' || (!paper.status && paper.status !== 'pending' && paper.status !== 'rejected'));
     if (isPublished) return true;
   }
   if (!user) return false;
-  return isDean(user) || isUreliaDirector(user) || isUreliaAdmin(user);
+  return canViewUnpublished(user);
 }
 
 // Final Archive & Publish approval is exclusively reserved for URELIA (Director / Admin)

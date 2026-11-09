@@ -347,59 +347,38 @@ export default function App() {
     };
   }, []);
 
-  // 2. Client-side Search & TF-IDF Relevance Scoring on live Firestore papers
+  // 2. Client-side Search & TF-IDF Relevance Scoring on live approved institutional papers
   useEffect(() => {
-    // Map pending/rejected submissions so unpublished submissions can be viewed/filtered by authorized roles
-    const mappedSubmissions: Research[] = submissionsList
-      .filter(sub => sub.status !== 'approved')
-      .map(sub => ({
-        researchID: sub.researchID || sub.submissionID,
-        title: sub.title,
-        abstract: sub.abstract,
-        authors: sub.authors,
-        keywords: sub.keywords,
-        department: sub.department,
-        course: sub.course,
-        year: sub.year,
-        status: sub.status || 'pending',
-        viewsCount: 0,
-        downloadsCount: 0,
-        submittedBy: sub.submittedBy,
-        dateAdded: sub.dateSubmitted,
-        fullPdfUrl: sub.pdfFileName ? `/uploads/${sub.pdfFileName}` : undefined,
-        authorCategory: sub.authorCategory,
-        publicationType: sub.publicationType || 'unpublished',
-        documentNumber: sub.documentNumber,
-        version: sub.version || 'v1.0'
-      }));
+    // The catalog archive is strictly an archive of APPROVED institutional records.
+    // Rejected submissions and pending submissions belong exclusively in the Review Queue (admin_review)
+    // and must NEVER appear in the public or dean/director catalog archive.
+    let list = rawResearchList.filter(
+      r => r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')
+    );
 
-    const combinedResearches: Research[] = [
-      ...rawResearchList,
-      ...mappedSubmissions.filter(s => !rawResearchList.some(r => r.researchID === s.researchID))
-    ];
-
-    let list = [...combinedResearches];
-
-    // Enforce access control: Only Dean, Director, and Admin can access unpublished researches
+    // Enforce access control on Unpublished research:
     if (!canViewUnpublished(currentUser)) {
-      list = list.filter(r => (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished');
+      // Roles 1 (Student), 2 (Program Chair), and 4 (URELIA Staff) have strictly NO ACCESS to unpublished research.
+      // They can only view published research.
+      list = list.filter(r => r.publicationType !== 'unpublished');
     } else {
-      // If user is a College Dean, scope unpublished papers to their designated college (plus all published papers)
-      if (isDean(currentUser) && currentUser.college) {
+      // Roles 3 (College Dean), 5 (URELIA Director), and 6 (URELIA Admin) have access to unpublished research.
+      // If user is a College Dean (role 3), unpublished research is scoped to their designated college:
+      if (isDean(currentUser) && currentUser.college && !isUreliaDirector(currentUser) && !isUreliaAdmin(currentUser)) {
         list = list.filter(r => {
-          const isPublished = (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished';
-          if (isPublished) return true;
+          if (r.publicationType !== 'unpublished') return true;
           return r.department === currentUser.college;
         });
       }
-      // If URELIA Director or Admin, they have unrestricted system-wide access to all unpublished research
 
-      // Filter by Publication Status for authorized Dean / Director / Admin
+      // Filter by Publication Status:
       if (filters.publicationStatus === 'published') {
-        list = list.filter(r => (r.status === 'approved' || (!r.status && r.status !== 'pending' && r.status !== 'rejected')) && r.publicationType !== 'unpublished');
+        list = list.filter(r => r.publicationType !== 'unpublished');
       } else if (filters.publicationStatus === 'unpublished') {
-        list = list.filter(r => r.status === 'pending' || r.status === 'rejected' || r.publicationType === 'unpublished');
+        // "the rejected is not going in the unpublished all the approved but unpublished only"
+        list = list.filter(r => r.publicationType === 'unpublished' && (r.status === 'approved' || !r.status));
       }
+      // If 'ALL', show both published and approved unpublished
     }
 
     // Compute IDF across current corpus for stable weights
