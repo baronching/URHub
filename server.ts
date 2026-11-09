@@ -83,11 +83,14 @@ const getHostingerTransporter = () => {
 // Pending Registration 6-Digit Numeric OTP Store
 interface PendingRegistration {
   code: string; // Strictly 6-digit numeric OTP
-  expiresAt: number;
+  userId?: string;
+  createdAt: number;
+  expiresAt: number; // 15 minutes for OTP code validity
+  cleanupAt: number; // 1 hour (60 minutes) for automatic deletion from Supabase
   payload: {
     fullName: string;
     email: string;
-    password: string;
+    password?: string;
     role: string;
     college: string;
     idNumber: string;
@@ -96,6 +99,53 @@ interface PendingRegistration {
   };
 }
 const pendingRegistrationOTPs = new Map<string, PendingRegistration>();
+
+// Auto-Delete Unverified Accounts After 1 Hour (60 Minutes)
+async function cleanupExpiredPendingRegistrations(): Promise<void> {
+  const now = Date.now();
+  for (const [email, pending] of pendingRegistrationOTPs.entries()) {
+    if (now >= pending.cleanupAt) {
+      console.log(`\n[Auto-Cleanup] 1 hour elapsed without verification for: ${email}`);
+      console.log(`[Auto-Cleanup] Deleting uncompleted account from Supabase...`);
+      pendingRegistrationOTPs.delete(email);
+
+      if (serverSupabase) {
+        try {
+          // 1. Delete from Supabase public.users table
+          const { error: delErr } = await serverSupabase
+            .from('users')
+            .delete()
+            .ilike('email', email);
+
+          if (delErr) {
+            console.warn(`[Auto-Cleanup] Note deleting ${email} from public.users:`, delErr.message);
+          } else {
+            console.log(`[Auto-Cleanup] Successfully wiped unverified ${email} from Supabase public.users table.`);
+          }
+
+          // 2. Delete from Supabase Auth (auth.users) if admin API available
+          if (serverSupabase.auth && (serverSupabase.auth as any).admin && pending.userId) {
+            try {
+              await (serverSupabase.auth as any).admin.deleteUser(pending.userId);
+              console.log(`[Auto-Cleanup] Successfully wiped unverified ${email} from Supabase auth.users.`);
+            } catch (authErr: any) {
+              console.warn(`[Auto-Cleanup] Note deleting auth user:`, authErr.message);
+            }
+          }
+        } catch (cleanupErr: any) {
+          console.warn(`[Auto-Cleanup] Cleanup error for ${email}:`, cleanupErr.message);
+        }
+      }
+    }
+  }
+}
+
+// Check every 5 minutes for expired unverified accounts
+setInterval(() => {
+  cleanupExpiredPendingRegistrations().catch(err => {
+    console.warn('[Auto-Cleanup] Interval error:', err.message);
+  });
+}, 5 * 60 * 1000);
 
 // Send 6-Digit Numeric Verification OTP via Hostinger SMTP
 async function sendNumericOTPEmail(toEmail: string, fullName: string, otpCode: string): Promise<boolean> {
@@ -327,13 +377,20 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
     });
   }
 
+  // Run housekeeping cleanup for any expired unverified accounts (> 1 hour)
+  cleanupExpiredPendingRegistrations().catch(() => {});
+
   // Generate strictly numeric 6-digit OTP (e.g. 100000 to 999999)
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const assignedUserId = req.body.userId || `usr_${Date.now()}`;
 
-  // Store in pending map (15 minutes expiry)
+  // Store in pending map (15 minutes OTP code expiry, 1 hour account deletion expiry)
   pendingRegistrationOTPs.set(cleanEmail, {
     code: otpCode,
+    userId: assignedUserId,
+    createdAt: Date.now(),
     expiresAt: Date.now() + 15 * 60 * 1000,
+    cleanupAt: Date.now() + 60 * 60 * 1000, // Auto-delete from Supabase if not verified within 1 hour
     payload: {
       fullName: fullName.trim(),
       email: cleanEmail,
@@ -350,7 +407,7 @@ app.post('/api/auth/send-verification-otp', async (req: Request, res: Response) 
   if (serverSupabase) {
     try {
       await serverSupabase.from('users').upsert({
-        id: `USR-UDM-${Date.now().toString().slice(-6)}`,
+        id: assignedUserId,
         name: fullName.trim(),
         full_name: fullName.trim(),
         email: cleanEmail,
@@ -402,9 +459,8 @@ app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response
   }
 
   if (Date.now() > pending.expiresAt) {
-    pendingRegistrationOTPs.delete(cleanEmail);
     return res.status(400).json({
-      error: 'Your verification code has expired. Please request a new code.'
+      error: 'Your 6-digit verification code has expired (15 minutes). Please click Resend Verification Code to receive a fresh code.'
     });
   }
 
@@ -463,6 +519,17 @@ app.post('/api/auth/verify-registration-otp', async (req: Request, res: Response
     message: 'Account successfully verified and activated! Welcome to UDM ResearchHub.',
     user: safeUser
   });
+});
+
+// 2b. Confirm User Verification (removes email from 1-hour deletion queue)
+app.post('/api/auth/confirm-verified-registration', (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (email) {
+    const cleanEmail = email.trim().toLowerCase();
+    pendingRegistrationOTPs.delete(cleanEmail);
+    console.log(`[UDM Auth] Confirmed official activation for ${cleanEmail}. Removed from 1-hour cleanup queue.`);
+  }
+  res.status(200).json({ success: true, message: 'Account activation confirmed.' });
 });
 
 // 3. Resend 6-Digit Numeric OTP

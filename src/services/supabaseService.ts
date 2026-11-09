@@ -839,6 +839,7 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        userId: newUser.userID,
         fullName: data.fullName.trim(),
         email: normalizedEmail,
         password: data.password,
@@ -915,6 +916,16 @@ export async function verifySignupOTP(email: string, tokenOrHash: string): Promi
     try {
       localStorage.setItem('udm_active_user', JSON.stringify(user));
     } catch {}
+
+    // Notify backend to remove from 1-hour cleanup queue
+    try {
+      fetch('/api/auth/confirm-verified-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email })
+      }).catch(() => {});
+    } catch {}
+
     return user;
   };
 
