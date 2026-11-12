@@ -2172,15 +2172,84 @@ app.post("/api/smtp/test", requireAuth, requireRole(canManageUsers, "Only URELIA
     });
   }
 });
-app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password || typeof email !== "string" || typeof password !== "string") {
-    return res.status(400).json({ error: "UDM Email and password are required." });
+var LOGIN_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+async function resolveLoginEmailFromIdentifier(rawIdentifier) {
+  const trimmed = rawIdentifier.trim();
+  if (!trimmed) {
+    return { email: null, invalidEmailFormat: false };
   }
-  const cleanEmail = email.trim().toLowerCase();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(cleanEmail)) {
+  if (trimmed.includes("@")) {
+    const cleanEmail = trimmed.toLowerCase();
+    if (!LOGIN_EMAIL_REGEX.test(cleanEmail)) {
+      return { email: null, invalidEmailFormat: true };
+    }
+    return { email: cleanEmail, invalidEmailFormat: false };
+  }
+  if (trimmed.length < 2 || trimmed.length > 100) {
+    return { email: null, invalidEmailFormat: false };
+  }
+  const cleanLower = trimmed.toLowerCase();
+  const escapedLike = trimmed.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+  if (serverSupabase) {
+    try {
+      const { data: idRows } = await serverSupabase.from("users").select("id, email, id_number").ilike("id_number", escapedLike).limit(5);
+      const exactIdMatches = (idRows || []).filter(
+        (r) => typeof r?.id_number === "string" && r.id_number.trim().toLowerCase() === cleanLower && typeof r?.email === "string" && r.email.trim()
+      );
+      if (exactIdMatches.length === 1) {
+        return { email: exactIdMatches[0].email.trim().toLowerCase(), invalidEmailFormat: false };
+      }
+      if (exactIdMatches.length > 1) {
+        return { email: null, invalidEmailFormat: false };
+      }
+    } catch {
+    }
+  }
+  const localIdMatches = usersDB.filter(
+    (u) => typeof u.idNumber === "string" && u.idNumber.trim().toLowerCase() === cleanLower && u.email
+  );
+  if (localIdMatches.length === 1) {
+    return { email: localIdMatches[0].email.trim().toLowerCase(), invalidEmailFormat: false };
+  }
+  if (localIdMatches.length > 1) {
+    return { email: null, invalidEmailFormat: false };
+  }
+  if (serverSupabase) {
+    try {
+      const { data: userIdRows } = await serverSupabase.from("users").select("id, email").eq("id", trimmed).limit(2);
+      if (Array.isArray(userIdRows) && userIdRows.length === 1 && userIdRows[0]?.email) {
+        return { email: String(userIdRows[0].email).trim().toLowerCase(), invalidEmailFormat: false };
+      }
+    } catch {
+    }
+  }
+  const localUserIdMatches = usersDB.filter(
+    (u) => typeof u.userID === "string" && u.userID.trim().toLowerCase() === cleanLower && u.email
+  );
+  if (localUserIdMatches.length === 1) {
+    return { email: localUserIdMatches[0].email.trim().toLowerCase(), invalidEmailFormat: false };
+  }
+  const fallbackUdmEmail = `${cleanLower}@udm.edu.ph`;
+  if (LOGIN_EMAIL_REGEX.test(fallbackUdmEmail)) {
+    return { email: fallbackUdmEmail, invalidEmailFormat: false };
+  }
+  return { email: null, invalidEmailFormat: false };
+}
+app.post("/api/auth/login", async (req, res) => {
+  const { email, identifier, password } = req.body;
+  const rawIdentifier = typeof identifier === "string" && identifier.trim() ? identifier.trim() : typeof email === "string" ? email.trim() : "";
+  if (!rawIdentifier || !password || typeof password !== "string") {
+    return res.status(400).json({ error: "UDM Email / ID number and password are required." });
+  }
+  const resolved = await resolveLoginEmailFromIdentifier(rawIdentifier);
+  if (resolved.invalidEmailFormat) {
     return res.status(400).json({ error: "Please enter a valid email address." });
+  }
+  const cleanEmail = resolved.email;
+  if (!cleanEmail) {
+    return res.status(401).json({
+      error: "Invalid email / ID or password. Please verify your credentials and try again."
+    });
   }
   let authenticatedUser = null;
   let verifiedByHash = false;

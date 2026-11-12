@@ -196,6 +196,7 @@ async function runSecurityTests() {
   // TEST 6: Authenticated Admin, Researcher Role Creation, Filtering & Password Sanitization
   let adminToken = '';
   const researcherEmail = `researcher.audit.${Date.now()}@udm.edu.ph`;
+  const researcherIdNumber = `FAC-${Date.now()}`;
   const researcherPass = 'ResearcherPass#2026';
 
   try {
@@ -241,6 +242,7 @@ async function runSecurityTests() {
         password: researcherPass,
         role: 'researcher',
         college: 'CCS',
+        idNumber: researcherIdNumber,
         administratorOf: '  Office of Institutional Research  '
       })
     });
@@ -251,6 +253,32 @@ async function runSecurityTests() {
       createdData.user?.administratorOf === 'Office of Institutional Research',
       'Admin Create Researcher (#6) Trims & Persists Administrator Affiliation'
     );
+
+    // Student / Faculty ID Login Check (identifier = idNumber)
+    const idLoginOk = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: researcherIdNumber.toLowerCase(), password: researcherPass })
+    });
+    const idLoginData = await idLoginOk.json().catch(() => ({}));
+    assert(
+      idLoginOk.status === 200 && idLoginData?.user?.email === researcherEmail && Boolean(idLoginData?.token),
+      'ID Login: Authenticates cleanly via Student/Faculty ID (case-insensitive)'
+    );
+
+    const idLoginWrongPass = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: researcherIdNumber, password: 'WrongPassword!123' })
+    });
+    assert(idLoginWrongPass.status === 401, 'ID Login: Rejects wrong password with 401');
+
+    const idLoginWildcard = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: '%', password: researcherPass })
+    });
+    assert(idLoginWildcard.status === 401, 'ID Login: Rejects SQL LIKE wildcard "%" injection with 401');
 
     const listRes = await fetch(`${BASE}/api/admin/users?role=researcher`, {
       headers: { Authorization: `Bearer ${adminToken}` }

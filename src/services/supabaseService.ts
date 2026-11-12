@@ -1151,23 +1151,27 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
   const clean = raw.toLowerCase();
   const candidateEmail = clean.includes('@') ? clean : `${clean}@udm.edu.ph`;
 
+  if (!raw) {
+    throw new Error('Please enter your UDM email address or Student/Faculty ID.');
+  }
+
   // Require explicit password (removes passwordless authentication bypass)
   if (!password) {
     throw new Error('Password is required to sign in.');
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (candidateEmail.includes('@') && !emailRegex.test(candidateEmail)) {
+  if (clean.includes('@') && !emailRegex.test(clean)) {
     throw new Error('Please enter a valid email address.');
   }
 
-  // 1. Authenticate against backend session endpoint (verifies scrypt hash or Supabase Auth + issues signed session)
+  // 1. Authenticate against backend session endpoint (supports Email, Student/Faculty ID, or User ID + verifies scrypt hash or Supabase Auth)
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email: candidateEmail, password })
+      body: JSON.stringify({ identifier: raw, email: clean.includes('@') ? clean : raw, password })
     });
 
     const body = await parseResponseJson(res);

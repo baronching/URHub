@@ -550,14 +550,14 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                       <Mail className="w-3.5 h-3.5 text-[#1a4731]" />
-                      <span>UDM Institutional Email or User ID *</span>
+                      <span>UDM Institutional Email or Student/Faculty ID *</span>
                     </label>
                     <input
                       type="text"
                       required
                       value={signInIdentifier}
                       onChange={e => setSignInIdentifier(e.target.value)}
-                      placeholder="e.g. jdelacruz@udm.edu.ph or user@gmail.com"
+                      placeholder="e.g. jdelacruz@udm.edu.ph or 2023-0001"
                       className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-xs sm:text-sm text-slate-900 focus:border-[#1a4731] focus:ring-2 focus:ring-[#1a4731]/10 focus:bg-white focus:outline-none font-medium transition-all"
                     />
                   </div>
