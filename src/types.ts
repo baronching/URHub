@@ -79,6 +79,7 @@ export type UserRole =
   | 'urelia_personnel'
   | 'urelia_director'
   | 'urelia_admin'
+  | 'researcher'
   // Legacy aliases
   | 'student_faculty'
   | 'admin'
@@ -91,8 +92,9 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
-  userType?: 'Student' | 'Faculty' | 'Faculty_Admin';
+  userType?: 'Student' | 'Faculty' | 'Faculty_Admin' | 'Researcher';
   college?: UDMCollege;
+  administratorOf?: string; // Required for 'researcher' role: office/unit/institution (max 100 chars)
   idNumber?: string;
   courseProgram?: string;
   course?: string;

@@ -15,7 +15,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   canSubmit = false,
 }) => {
   return (
-    <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-[#c9a84c]/40 bg-[#1a4731]/40 backdrop-blur-md min-h-[340px] sm:min-h-[380px] flex items-center transition-all p-6 sm:p-10">
+    <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-[#c9a84c]/40 bg-[#113122] min-h-[340px] sm:min-h-[380px] flex items-center transition-all p-6 sm:p-10">
       {/* Hero Content */}
       <div className="relative z-10 w-full space-y-6 max-w-4xl text-white">
         {/* Heraldic Tagline Badge */}
@@ -31,28 +31,28 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <span className="text-[#c9a84c]">Archives & Repository</span>
           </h1>
           <p className="text-sm sm:text-base text-slate-100 leading-relaxed max-w-2xl">
-            Centralized digital research database for capstone projects, academic journals, and faculty studies across all 7 Colleges of Universidad de Manila. Enhanced with Machine Learning TF-IDF indexing.
+            Centralized digital research database for capstone projects, academic journals, and faculty studies across all 7 Colleges of Universidad de Manila. Enhanced with Smart Academic Indexing.
           </p>
         </div>
 
         {/* Stats & Feature Highlights */}
         <div className="flex flex-wrap gap-3 sm:gap-6 pt-1 text-xs sm:text-sm font-semibold text-slate-100">
-          <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-lg border border-white/15 backdrop-blur-sm">
+          <div className="flex items-center space-x-2 bg-[#0d261a] px-3 py-1.5 rounded-lg border border-white/15">
             <BookOpen className="w-4 h-4 text-[#c9a84c]" />
             <span><strong className="text-white font-bold">{totalPapers}</strong> Approved Researches</span>
           </div>
 
-          <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-lg border border-white/15 backdrop-blur-sm">
+          <div className="flex items-center space-x-2 bg-[#0d261a] px-3 py-1.5 rounded-lg border border-white/15">
             <Building2 className="w-4 h-4 text-[#c9a84c]" />
             <span>7 Academic Colleges</span>
           </div>
 
-          <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-lg border border-white/15 backdrop-blur-sm">
+          <div className="flex items-center space-x-2 bg-[#0d261a] px-3 py-1.5 rounded-lg border border-white/15">
             <Sparkles className="w-4 h-4 text-[#c9a84c]" />
-            <span>TF-IDF Recommendation</span>
+            <span>Smart Recommendation</span>
           </div>
 
-          <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-lg border border-white/15 backdrop-blur-sm">
+          <div className="flex items-center space-x-2 bg-[#0d261a] px-3 py-1.5 rounded-lg border border-white/15">
             <ShieldCheck className="w-4 h-4 text-[#c9a84c]" />
             <span>Abstract Protection</span>
           </div>

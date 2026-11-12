@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UDMCollege, UDM_COLLEGES } from '../types';
-import { INITIAL_USERS } from '../data/mockDatabase';
+import {
+  isCollegeLockedRole,
+  validateAdministratorOf,
+  URELIA_OFFICE_COLLEGE,
+  ADMINISTRATOR_OF_MAX_LENGTH
+} from '../utils/userUtils';
 import {
   registerUserWithSupabase,
   loginUserWithSupabase,
@@ -29,8 +34,7 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
-  Sparkles,
-  Zap
+  Sparkles
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -74,9 +78,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
   const [confirmPassword, setConfirmPassword] = useState('');
   const [userType, setUserType] = useState<UserRole>('student');
   const [college, setCollege] = useState<UDMCollege>('CCS');
+  const [administratorOf, setAdministratorOf] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [courseProgram, setCourseProgram] = useState('');
   const [yearLevel, setYearLevel] = useState<string>('1st Year');
+
+  // Preset & lock College when URELIA Personnel or Director role is selected
+  useEffect(() => {
+    if (isCollegeLockedRole(userType)) {
+      setCollege(URELIA_OFFICE_COLLEGE);
+    }
+  }, [userType]);
 
   // Password Visibility Toggle State
   const [showPassword, setShowPassword] = useState(false);
@@ -144,6 +156,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
           throw new Error('Student/Faculty ID Number is required.');
         }
 
+        const adminOfCheck = validateAdministratorOf(userType, administratorOf);
+        if (!adminOfCheck.valid) {
+          throw new Error(adminOfCheck.error);
+        }
+
+        const effectiveCollege = isCollegeLockedRole(userType) ? URELIA_OFFICE_COLLEGE : college;
+
         // Execute Supabase Auth + profile metadata registration
         const result = await registerUserWithSupabase({
           fullName,
@@ -151,7 +170,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
           password,
           confirmPassword,
           role: userType,
-          college,
+          college: effectiveCollege,
+          administratorOf: userType === 'researcher' ? adminOfCheck.value : undefined,
           idNumber,
           courseProgram,
           yearLevel: userType === 'student' ? yearLevel : undefined
@@ -502,6 +522,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                     <option value="urelia_personnel">URELIA / Research Personnel</option>
                     <option value="urelia_director">URELIA Director</option>
                     <option value="urelia_admin">URELIA Admin</option>
+                    <option value="researcher">Researcher</option>
                   </select>
                 </div>
 
@@ -509,11 +530,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                   <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                     <Briefcase className="w-3.5 h-3.5 text-[#1a4731]" />
                     <span>UDM Unit *</span>
+                    {isCollegeLockedRole(userType) && (
+                      <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.2 rounded font-bold normal-case">
+                        <Lock className="w-2.5 h-2.5" /> Locked
+                      </span>
+                    )}
                   </label>
                   <select
-                    value={college}
-                    onChange={e => setCollege(e.target.value as UDMCollege)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium"
+                    value={isCollegeLockedRole(userType) ? URELIA_OFFICE_COLLEGE : college}
+                    onChange={e => {
+                      if (!isCollegeLockedRole(userType)) {
+                        setCollege(e.target.value as UDMCollege);
+                      }
+                    }}
+                    disabled={isCollegeLockedRole(userType)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none cursor-pointer font-medium disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
                   >
                     {UDM_COLLEGES.map(c => (
                       <option key={c.id} value={c.id}>
@@ -521,8 +552,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                       </option>
                     ))}
                   </select>
+                  {isCollegeLockedRole(userType) && (
+                    <p className="text-[10px] text-amber-700 font-medium mt-1">
+                      Locked to URELIA Office (FAC-ADM) for URELIA Personnel & Director.
+                    </p>
+                  )}
                 </div>
               </div>
+
+              {/* Conditional Researcher Field: Administrator of / Where they come from */}
+              {userType === 'researcher' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+                      <Briefcase className="w-3.5 h-3.5 text-[#1a4731]" />
+                      <span>Administrator of / Where they come from *</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {administratorOf.trim().length}/{ADMINISTRATOR_OF_MAX_LENGTH}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    maxLength={ADMINISTRATOR_OF_MAX_LENGTH}
+                    value={administratorOf}
+                    onChange={e => setAdministratorOf(e.target.value)}
+                    placeholder="e.g., Research & Extension Unit / CCS Department"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Required (max {ADMINISTRATOR_OF_MAX_LENGTH} characters). Published researchers only.
+                  </p>
+                </div>
+              )}
 
               {/* Student/Faculty ID Number */}
               <div>
@@ -681,105 +744,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess, i
                     : 'Sign In to UDM-ResearchHub'}
                 </span>
               </button>
-
-              {/* Quick Demo Accounts Selection */}
-              <div className="pt-3 border-t border-slate-100 space-y-2">
-                <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                  <span className="text-[#1a4731] font-bold">⚡ Instant Login by Role (1-Click)</span>
-                  <span className="text-[#c9a84c] bg-[#1a4731] px-1.5 py-0.2 rounded font-mono text-[9px]">Official Matrix</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-left">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (INITIAL_USERS[0]) {
-                        onLoginSuccess(INITIAL_USERS[0]);
-                        onClose();
-                      }
-                    }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                    title="Instant sign in as Student Juan Dela Cruz"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">1. Student</div>
-                    <div className="text-[9px] text-slate-500 truncate">Juan Dela Cruz</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (INITIAL_USERS[1]) {
-                        onLoginSuccess(INITIAL_USERS[1]);
-                        onClose();
-                      }
-                    }}
-                    className="p-2 rounded-lg border border-teal-300 hover:border-teal-500 bg-teal-50/70 hover:bg-teal-100/70 transition-all text-left cursor-pointer group shadow-2xs ring-1 ring-teal-400/40"
-                    title="Instant sign in as Program Chair Prof. Maria Santos"
-                  >
-                    <div className="text-[11px] font-bold text-teal-900 group-hover:text-[#1a4731]">2. Program Chair</div>
-                    <div className="text-[9px] text-teal-700 font-medium truncate">Prof. Maria Santos</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (INITIAL_USERS[2]) {
-                        onLoginSuccess(INITIAL_USERS[2]);
-                        onClose();
-                      }
-                    }}
-                    className="p-2 rounded-lg border border-amber-300 hover:border-amber-500 bg-amber-50/70 hover:bg-amber-100/70 transition-all text-left cursor-pointer group shadow-2xs"
-                    title="Instant sign in as College Dean Dr. Carmelo Perez"
-                  >
-                    <div className="text-[11px] font-bold text-amber-900 group-hover:text-[#1a4731]">3. College Dean</div>
-                    <div className="text-[9px] text-amber-700 font-medium truncate">Dr. Carmelo Perez</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (INITIAL_USERS[3]) {
-                        onLoginSuccess(INITIAL_USERS[3]);
-                        onClose();
-                      }
-                    }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                    title="Instant sign in as URELIA Staff Engr. Mark Tan"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">4. URELIA Staff</div>
-                    <div className="text-[9px] text-slate-500 truncate">Engr. Mark Tan</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (INITIAL_USERS[4]) {
-                        onLoginSuccess(INITIAL_USERS[4]);
-                        onClose();
-                      }
-                    }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                    title="Instant sign in as URELIA Director Dr. Roberto Del Rosario"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">5. Director</div>
-                    <div className="text-[9px] text-slate-500 truncate">Dr. Del Rosario</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (INITIAL_USERS[5]) {
-                        onLoginSuccess(INITIAL_USERS[5]);
-                        onClose();
-                      }
-                    }}
-                    className="p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                    title="Instant sign in as URELIA Administrator"
-                  >
-                    <div className="text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">6. Admin</div>
-                    <div className="text-[9px] text-slate-500 truncate">URELIA Admin</div>
-                  </button>
-                </div>
-              </div>
             </form>
           )}
 

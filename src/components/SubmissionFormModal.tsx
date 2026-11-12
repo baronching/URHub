@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { UDMCollege, UDM_COLLEGES, User, Submission, PublicationType } from '../types';
-import { createSubmission } from '../services/supabaseService';
-import { canSubmitResearch, isProgramChair, isUrelia, isUreliaPersonnel } from '../utils/userUtils';
+import { createSubmission, getAuthHeaders } from '../services/supabaseService';
+import {
+  canSubmitResearch,
+  isProgramChair,
+  isUrelia,
+  isUreliaPersonnel,
+  isCollegeLockedRole,
+  isResearcher,
+  URELIA_OFFICE_COLLEGE,
+  sanitizeSafeUrl
+} from '../utils/userUtils';
 import { calculateTitleSimilarity, generateDocumentNumber } from '../utils/titleIntegrity';
 import { saveOriginalPdf } from '../utils/pdfStorage';
 import {
@@ -45,10 +54,15 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
   const isChair = isProgramChair(currentUser);
   const isUreliaStaff = isUrelia(currentUser);
   const isPersonnel = isUreliaPersonnel(currentUser);
+  const isRoleCollegeLocked = isCollegeLockedRole(currentUser?.role);
+  const isCollegeLocked = isChair || isRoleCollegeLocked;
+  const isUserResearcher = isResearcher(currentUser);
 
   // Initial college and courses
-  const userCollege: UDMCollege = currentUser?.college || 'CCS';
-  const initialDepartment: UDMCollege = isChair ? userCollege : (currentUser?.college || 'CCS');
+  const userCollege: UDMCollege = isRoleCollegeLocked
+    ? URELIA_OFFICE_COLLEGE
+    : (currentUser?.college || 'CCS');
+  const initialDepartment: UDMCollege = isCollegeLocked ? userCollege : (currentUser?.college || 'CCS');
   const initialCollegeObj = UDM_COLLEGES.find(c => c.id === initialDepartment);
   const initialCourse = currentUser?.course || initialCollegeObj?.courses[0] || UDM_COLLEGES[0].courses[0];
 
@@ -120,7 +134,7 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 
   // Handle department change -> update courses list
   const handleDepartmentChange = (col: UDMCollege) => {
-    if (isChair) return; // Chair is locked to their designated college
+    if (isCollegeLocked) return; // Program Chair & URELIA Personnel/Director are locked to designated unit
     setDepartment(col);
     const found = UDM_COLLEGES.find(c => c.id === col);
     if (found && found.courses.length > 0) {
@@ -238,10 +252,20 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
       return;
     }
 
+    // Researcher restriction: strictly Published research papers only
+    if (isUserResearcher && publicationType !== 'published') {
+      setErrorMsg('Published Researchers Only: Researchers can only submit Published research papers. Please select "Published Paper" and provide publication proof.');
+      return;
+    }
+
     // Published Paper Flow Proof Validation
     if (publicationType === 'published') {
       if (!externalUrl.trim()) {
         setErrorMsg('Published papers require an external URL or publication link.');
+        return;
+      }
+      if (!sanitizeSafeUrl(externalUrl.trim(), false)) {
+        setErrorMsg('Please enter a valid external URL starting with https:// or http://.');
         return;
       }
       if (!publisherDetails.trim()) {
@@ -274,6 +298,8 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
 
       const titleIntegrity = calculateTitleSimilarity(title, pdfFileName);
 
+      const effectiveDepartment: UDMCollege = isRoleCollegeLocked ? URELIA_OFFICE_COLLEGE : department;
+
       const newSubmission: Submission = {
         submissionID: subId,
         documentNumber,
@@ -286,7 +312,7 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
         abstract: abstract.trim(),
         authors: authorList,
         keywords: keywordList,
-        department,
+        department: effectiveDepartment,
         course,
         year: year || new Date().getFullYear(),
         dateSubmitted: new Date().toISOString().split('T')[0],
@@ -306,7 +332,13 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
             documentNumber,
             date: new Date().toISOString(),
             actionBy: currentUser?.name || 'Submitter',
-            actionRole: isPersonnel ? 'URELIA Research Staff' : (isChair ? 'Program Chair' : 'Faculty'),
+            actionRole: isPersonnel
+              ? 'URELIA Research Staff'
+              : isChair
+                ? 'Program Chair'
+                : isUserResearcher
+                  ? 'Researcher'
+                  : 'Faculty',
             action: isPersonnel
               ? 'Submitted Directly to URELIA Director for Archival Clearance'
               : (publicationType === 'unpublished'
@@ -316,7 +348,7 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
           }
         ],
         pdfFileName: pdfFileName || 'research_manuscript.pdf',
-        authorCategory: isChair || isUreliaStaff ? 'Faculty_Admin' : 'Student'
+        authorCategory: (isChair || isUreliaStaff || isUserResearcher) ? 'Faculty_Admin' : 'Student'
       };
 
       // Save original uploaded PDF file to IndexedDB & Server Storage
@@ -327,38 +359,50 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
           if (pdfFileName) await saveOriginalPdf(pdfFileName, selectedFile);
           if (documentNumber) await saveOriginalPdf(documentNumber, selectedFile);
 
-          const reader = new FileReader();
-          reader.onload = async () => {
-            try {
-              const base64 = (reader.result as string).split(',')[1];
-              await fetch('/api/upload-pdf', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  fileName: pdfFileName || 'manuscript.pdf',
-                  researchId: newSubmission.researchID,
-                  fileBase64: base64
-                })
-              });
-            } catch (upErr) {
-              console.warn('PDF server upload note:', upErr);
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(((reader.result as string) || '').split(',')[1] || '');
+            reader.onerror = () => reject(new Error('Failed to read selected PDF file.'));
+            reader.readAsDataURL(selectedFile);
+          });
+
+          if (base64) {
+            const uploadRes = await fetch('/api/upload-pdf', {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              credentials: 'include',
+              body: JSON.stringify({
+                fileName: pdfFileName || 'manuscript.pdf',
+                researchId: newSubmission.researchID,
+                fileBase64: base64
+              })
+            }).catch(() => null);
+            if (uploadRes && uploadRes.status >= 400 && uploadRes.status < 500) {
+              const upErr = await uploadRes.json().catch(() => ({}));
+              throw new Error(upErr?.error || 'PDF upload failed server validation.');
             }
-          };
-          reader.readAsDataURL(selectedFile);
-        } catch (storageErr) {
-          console.warn('PDF local cache note:', storageErr);
+          }
+        } catch (storageErr: any) {
+          if (storageErr?.message && storageErr.message.includes('PDF')) {
+            throw storageErr;
+          }
+          console.warn('PDF cache note:', storageErr);
         }
       }
 
-      // Backend API validation
-      try {
-        await fetch('/api/submissions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newSubmission)
-        });
-      } catch (apiErr) {
-        console.warn('Backend submissions API note:', apiErr);
+      // Backend API validation (enforces #5/#6 lock & researcher published-only rule)
+      const apiRes = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify(newSubmission)
+      }).catch(() => null);
+
+      if (apiRes && !apiRes.ok) {
+        const apiErr = await apiRes.json().catch(() => ({}));
+        if (apiRes.status >= 400 && apiRes.status < 500) {
+          throw new Error(apiErr?.error || 'Submission rejected by institutional policy validation.');
+        }
       }
 
       await createSubmission(newSubmission);
@@ -608,17 +652,17 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
                   <Building2 className="w-3.5 h-3.5 text-[#1a4731]" />
                   <span>College Affiliation *</span>
-                  {isChair && (
-                    <span className="text-[9px] text-[#1a4731] bg-[#1a4731]/10 px-1 py-0.2 rounded font-bold ml-1">
-                      Department Locked
+                  {isCollegeLocked && (
+                    <span className="text-[9px] text-[#1a4731] bg-[#1a4731]/10 px-1.5 py-0.2 rounded font-bold ml-1">
+                      {isRoleCollegeLocked ? 'Locked to URELIA Office (FAC-ADM)' : 'Department Locked'}
                     </span>
                   )}
                 </label>
                 <select
-                  value={department}
+                  value={isRoleCollegeLocked ? URELIA_OFFICE_COLLEGE : department}
                   onChange={e => handleDepartmentChange(e.target.value as UDMCollege)}
-                  disabled={isChair}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-bold focus:border-[#1a4731] focus:outline-none disabled:opacity-75 disabled:bg-slate-100"
+                  disabled={isCollegeLocked}
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-bold focus:border-[#1a4731] focus:outline-none disabled:opacity-75 disabled:bg-slate-100 disabled:cursor-not-allowed"
                 >
                   {UDM_COLLEGES.map(col => (
                     <option key={col.id} value={col.id}>
@@ -803,6 +847,19 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
             </p>
           </div>
 
+          {/* Researcher Published-Only Enforcement Notice */}
+          {isUserResearcher && publicationType !== 'published' && (
+            <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs flex items-start space-x-2 font-medium">
+              <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Published Researchers Only</span>
+                <span>
+                  Your Researcher account is only permitted to submit <strong>Published Research Papers</strong>. Please switch the Publication Scope above to <strong>Published Paper</strong> and provide publication proof to enable submission.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Bottom Actions */}
           <div className="pt-2 border-t border-slate-200 flex items-center justify-end space-x-2.5">
             <button
@@ -815,8 +872,8 @@ export const SubmissionFormModal: React.FC<SubmissionFormModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-50"
+              disabled={isSubmitting || (isUserResearcher && publicationType !== 'published')}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#1a4731] hover:bg-[#123323] text-white shadow-md flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4 text-[#c9a84c]" />
               <span>

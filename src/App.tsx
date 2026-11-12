@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import udmBuildingBg from './assets/images/udm_hero_building_1785654888561.jpg';
 import { Research, Submission, AccessRequest, User, SearchFilters, Recommendation, UDMCollege } from './types';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
@@ -47,7 +46,8 @@ import {
   canReviewSubmissions,
   canViewAnalytics,
   canManageUsers,
-  getUserRoleDisplayLabel
+  getUserRoleDisplayLabel,
+  resolveCollegeForRole
 } from './utils/userUtils';
 import { INITIAL_USERS, INITIAL_RESEARCH, INITIAL_SUBMISSIONS } from './data/mockDatabase';
 
@@ -251,9 +251,13 @@ export default function App() {
               name: profile?.full_name || profile?.name || meta.full_name || session.user.email?.split('@')[0],
               fullName: profile?.full_name || profile?.name || meta.full_name || session.user.email?.split('@')[0],
               email: profile?.email || session.user.email || '',
-              role: profile?.role === 'admin' ? 'admin' : profile?.role === 'super_admin' ? 'super_admin' : 'student_faculty',
+              role: (profile?.role || 'student_faculty') as any,
+              administratorOf: profile?.administrator_of || undefined,
               userType: profile?.role === 'Faculty/Admin' ? 'Faculty_Admin' : (profile?.user_type || meta.role || meta.user_type || 'Student'),
-              college: (profile?.udm_unit?.slice(0, 3) || profile?.college || meta.college || 'CCS') as UDMCollege,
+              college: resolveCollegeForRole(
+                (profile?.role || 'student_faculty') as any,
+                (profile?.udm_unit?.slice(0, 3) || profile?.college || meta.college || 'CCS') as UDMCollege
+              ).college,
               idNumber: profile?.id_number || meta.id_number || '',
               courseProgram: profile?.course || profile?.course_program || meta.course || meta.course_program || '',
               yearLevel: profile?.year_level || meta.year_level || '1st Year',
@@ -290,8 +294,9 @@ export default function App() {
                         fullName: profile.full_name || profile.name,
                         email: profile.email,
                         role: profile.role || 'student_faculty',
+                        administratorOf: profile.administrator_of || undefined,
                         userType: profile.user_type || 'Student',
-                        college: profile.college || 'CCS',
+                        college: resolveCollegeForRole(profile.role || 'student_faculty', profile.college || 'CCS').college,
                         idNumber: profile.id_number || '',
                         courseProgram: profile.course_program || '',
                         readingHistory: profile.reading_history || []
@@ -366,10 +371,10 @@ export default function App() {
     } else {
       // Roles 3 (College Dean), 5 (URELIA Director), and 6 (URELIA Admin) have access to unpublished research.
       // If user is a College Dean (role 3), unpublished research is scoped to their designated college:
-      if (isDean(currentUser) && currentUser.college && !isUreliaDirector(currentUser) && !isUreliaAdmin(currentUser)) {
+      if (isDean(currentUser) && currentUser?.college && !isUreliaDirector(currentUser) && !isUreliaAdmin(currentUser)) {
         list = list.filter(r => {
           if (r.publicationType !== 'unpublished') return true;
-          return r.department === currentUser.college;
+          return r.department === currentUser?.college;
         });
       }
 
@@ -822,19 +827,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen text-slate-800 flex flex-col font-sans selection:bg-[#c9a84c] selection:text-[#1a4731] relative overflow-x-hidden w-full max-w-full">
-      
-      {/* Full-Page Fixed Background Image with Dark Green (#1a4731) Overlay */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <img
-          src={udmBuildingBg}
-          alt="Universidad de Manila Campus Background"
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-center"
-        />
-        {/* Consistent dark green overlay (#1a4731) across the entire page */}
-        <div className="absolute inset-0 bg-[#1a4731]/80 backdrop-blur-[1px]" />
-      </div>
+    <div className="min-h-screen bg-[#1a4731] text-slate-800 flex flex-col font-sans selection:bg-[#c9a84c] selection:text-[#1a4731] relative overflow-x-hidden w-full max-w-full">
 
       {/* Toast Notification */}
       {toastMsg && (

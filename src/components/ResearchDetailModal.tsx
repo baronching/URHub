@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Research, User, AccessRequest, UDM_COLLEGES } from '../types';
 import { canViewUnpublished, canViewFullPaper } from '../utils/userUtils';
+import { getAuthHeaders } from '../services/supabaseService';
 import { ManuscriptReader } from './ManuscriptReader';
 import jsPDF from 'jspdf';
 import {
@@ -92,7 +93,8 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
     try {
       const res = await fetch('/api/ai/summarize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
+        credentials: 'include',
         body: JSON.stringify({
           title: research.title,
           abstract: research.abstract,

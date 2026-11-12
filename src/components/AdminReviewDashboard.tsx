@@ -7,7 +7,8 @@ import {
   isUreliaDirector,
   isUreliaAdmin,
   isUreliaPersonnel,
-  canApproveOrRejectSubmissions
+  canApproveOrRejectSubmissions,
+  sanitizeSafeUrl
 } from '../utils/userUtils';
 import {
   CheckSquare,
@@ -183,7 +184,7 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
     <div class="h3">INSTITUTIONAL METADATA & SUBMISSION PROOF</div>
     <p><strong>Submitter:</strong> ${escapeHtml(sub.submitterName)} (${escapeHtml(sub.submitterEmail)})</p>
     <p><strong>File Name:</strong> ${escapeHtml(fileName)}</p>
-    ${sub.publicationProof?.externalUrl ? `<p><strong>Publication Evidence URL:</strong> <a href="${escapeHtml(sub.publicationProof.externalUrl)}" target="_blank">${escapeHtml(sub.publicationProof.externalUrl)}</a></p>` : ''}
+    ${sub.publicationProof?.externalUrl && sanitizeSafeUrl(sub.publicationProof.externalUrl, false) ? `<p><strong>Publication Evidence URL:</strong> <a href="${escapeHtml(sanitizeSafeUrl(sub.publicationProof.externalUrl, false))}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.publicationProof.externalUrl)}</a></p>` : ''}
     ${sub.publicationProof?.publisherName ? `<p><strong>Publisher / Conference:</strong> ${escapeHtml(sub.publicationProof.publisherName)}</p>` : ''}
   </div>
 </body>
@@ -527,15 +528,15 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                   )}
 
                   {/* Publication Proof Preview (if published) */}
-                  {sub.publicationProof?.externalUrl && (
+                  {sub.publicationProof?.externalUrl && sanitizeSafeUrl(sub.publicationProof.externalUrl, false) && (
                     <div className="p-2.5 bg-purple-50/70 border border-purple-200 rounded-xl text-xs text-purple-950 flex items-center gap-2">
                       <Award className="w-4 h-4 text-purple-700 shrink-0" />
                       <span>
                         Published at: <strong>{sub.publicationProof.publisherName || 'External Journal'}</strong> &bull;{' '}
                         <a
-                          href={sub.publicationProof.externalUrl}
+                          href={sanitizeSafeUrl(sub.publicationProof.externalUrl, false)}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="underline font-bold text-purple-900 hover:text-purple-700"
                         >
                           View External Link
@@ -722,13 +723,13 @@ export const AdminReviewDashboard: React.FC<AdminReviewDashboardProps> = ({
                     <strong>Presentation / Publication Date:</strong> {selectedSubmission.publicationProof.presentationDate}
                   </p>
                 )}
-                {selectedSubmission.publicationProof.externalUrl && (
+                {selectedSubmission.publicationProof.externalUrl && sanitizeSafeUrl(selectedSubmission.publicationProof.externalUrl, false) && (
                   <p className="break-all">
                     <strong>URL:</strong>{' '}
                     <a
-                      href={selectedSubmission.publicationProof.externalUrl}
+                      href={sanitizeSafeUrl(selectedSubmission.publicationProof.externalUrl, false)}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="underline font-bold text-purple-900"
                     >
                       {selectedSubmission.publicationProof.externalUrl}

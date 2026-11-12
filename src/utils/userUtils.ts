@@ -1,4 +1,103 @@
-import { User, UserRole } from '../types';
+import { UDMCollege, UDM_COLLEGES, User, UserRole } from '../types';
+
+export const URELIA_OFFICE_COLLEGE: UDMCollege = 'FAC-ADM';
+export const ADMINISTRATOR_OF_MAX_LENGTH = 100;
+
+export const ALLOWED_USER_ROLES: UserRole[] = [
+  'student',
+  'program_chair',
+  'dean',
+  'urelia_personnel',
+  'urelia_director',
+  'urelia_admin',
+  'researcher',
+];
+
+const VALID_COLLEGE_IDS = new Set<string>(UDM_COLLEGES.map(c => c.id));
+
+/**
+ * Returns true if the role forces the College / Unit dropdown to be locked to the URELIA office preset.
+ */
+export function isCollegeLockedRole(role?: string | null): boolean {
+  const normalized = String(role || '').trim().toLowerCase();
+  return normalized === 'urelia_personnel' || normalized === 'urelia_director';
+}
+
+/**
+ * Resolves and validates College / Unit for a given role on both frontend and backend.
+ * Rejects attempts to bypass the lock on urelia_personnel / urelia_director.
+ */
+export function resolveCollegeForRole(
+  role?: string | null,
+  requestedCollege?: unknown
+): { valid: boolean; college: UDMCollege; error?: string } {
+  const cleanRequested =
+    typeof requestedCollege === 'string' ? requestedCollege.trim() : '';
+
+  if (isCollegeLockedRole(role)) {
+    if (cleanRequested && cleanRequested !== URELIA_OFFICE_COLLEGE) {
+      return {
+        valid: false,
+        college: URELIA_OFFICE_COLLEGE,
+        error:
+          'College / Unit is locked to the URELIA Office preset (FAC-ADM) for URELIA Personnel and URELIA Director roles and cannot be manually changed.'
+      };
+    }
+    return { valid: true, college: URELIA_OFFICE_COLLEGE };
+  }
+
+  if (!cleanRequested) {
+    return { valid: true, college: 'CCS' };
+  }
+
+  if (!VALID_COLLEGE_IDS.has(cleanRequested)) {
+    return {
+      valid: false,
+      college: 'CCS',
+      error: `Invalid College / Unit "${cleanRequested}".`
+    };
+  }
+
+  return { valid: true, college: cleanRequested as UDMCollege };
+}
+
+/**
+ * Validates the required "Administrator of / Where they come from" field when role is 'researcher'.
+ * Trims whitespace before validating non-empty and max 100 character limit.
+ */
+export function validateAdministratorOf(
+  role?: string | null,
+  value?: unknown
+): { valid: boolean; value?: string; error?: string } {
+  if (String(role || '').trim().toLowerCase() !== 'researcher') {
+    return { valid: true, value: undefined };
+  }
+
+  if (typeof value !== 'string') {
+    return {
+      valid: false,
+      error: '"Administrator of / Where they come from" is required for Researchers.'
+    };
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return {
+      valid: false,
+      error:
+        '"Administrator of / Where they come from" cannot be empty or contain only spaces.'
+    };
+  }
+
+  if (trimmed.length > ADMINISTRATOR_OF_MAX_LENGTH) {
+    return {
+      valid: false,
+      error: `"Administrator of / Where they come from" must not exceed ${ADMINISTRATOR_OF_MAX_LENGTH} characters (currently ${trimmed.length}).`
+    };
+  }
+
+  return { valid: true, value: trimmed };
+}
 
 export function isGuest(_user?: User | null): boolean {
   return false;
@@ -7,16 +106,21 @@ export function isGuest(_user?: User | null): boolean {
 export function isStudent(user?: User | null): boolean {
   if (!user) return false;
   if (user.role === 'student') return true;
-  if (user.role === 'student_faculty' && user.userType !== 'Faculty' && !user.name?.startsWith('Prof.') && !user.name?.startsWith('Dr.')) {
+  if (user.role === 'student_faculty' && user.userType !== 'Faculty') {
     return true;
   }
   return false;
 }
 
+export function isResearcher(user?: User | null): boolean {
+  if (!user) return false;
+  return user.role === 'researcher';
+}
+
 export function isProgramChair(user?: User | null): boolean {
   if (!user) return false;
   if (user.role === 'program_chair') return true;
-  if (user.role === 'student_faculty' && (user.userType === 'Faculty' || user.name?.startsWith('Prof.'))) {
+  if (user.role === 'student_faculty' && user.userType === 'Faculty') {
     return true;
   }
   return false;
@@ -24,14 +128,7 @@ export function isProgramChair(user?: User | null): boolean {
 
 export function isDean(user?: User | null): boolean {
   if (!user) return false;
-  return (
-    user.role === 'dean' ||
-    user.userType === 'Dean' ||
-    Boolean(user.email && /dean/i.test(user.email)) ||
-    Boolean(user.courseProgram && /dean/i.test(user.courseProgram)) ||
-    Boolean(user.course && /dean/i.test(user.course)) ||
-    Boolean(user.name && /dean/i.test(user.name))
-  );
+  return user.role === 'dean';
 }
 
 export function isUreliaPersonnel(user?: User | null): boolean {
@@ -41,14 +138,7 @@ export function isUreliaPersonnel(user?: User | null): boolean {
 
 export function isUreliaDirector(user?: User | null): boolean {
   if (!user) return false;
-  return (
-    user.role === 'urelia_director' ||
-    user.role === 'director' ||
-    Boolean(user.email && /director/i.test(user.email)) ||
-    Boolean(user.name && /director/i.test(user.name)) ||
-    Boolean(user.courseProgram && /director/i.test(user.courseProgram)) ||
-    Boolean(user.course && /director/i.test(user.course))
-  );
+  return user.role === 'urelia_director';
 }
 
 export function isUreliaAdmin(user?: User | null): boolean {
@@ -56,15 +146,18 @@ export function isUreliaAdmin(user?: User | null): boolean {
   return (
     user.role === 'urelia_admin' ||
     user.role === 'super_admin' ||
-    user.role === 'admin' ||
-    Boolean(user.email && /(admin|sysadmin)/i.test(user.email))
+    user.role === 'admin'
   );
 }
 
 // URELIA Office Staff (Personnel, Director, or Admin)
 export function isUrelia(user?: User | null): boolean {
   if (!user) return false;
-  return isUreliaAdmin(user) || isUreliaDirector(user) || isUreliaPersonnel(user) || user.role === 'super_admin' || user.role === 'admin';
+  return (
+    isUreliaAdmin(user) ||
+    isUreliaDirector(user) ||
+    isUreliaPersonnel(user)
+  );
 }
 
 // Academic Leads & Faculty (Program Chair, Dean, or Faculty/Admin)
@@ -75,29 +168,31 @@ export function isFacultyAdmin(user?: User | null): boolean {
     isDean(user) ||
     user.role === 'admin' ||
     user.userType === 'Faculty' ||
-    user.userType === 'Faculty_Admin' ||
-    Boolean(user.name && (/^(Prof\.|Dr\.)/i.test(user.name.trim())))
+    user.userType === 'Faculty_Admin'
   );
 }
 
 // ==========================================
-// ROLE PERMISSION CHECKS (6 Authenticated Roles)
+// ROLE PERMISSION CHECKS
 // ==========================================
 
-// Only College Deans (3), URELIA Director (5), and URELIA Admin (6) can access unpublished researches
-// Roles 1 (Student), 2 (Program Chair), and 4 (URELIA Staff) have strictly NO ACCESS
+// Only College Deans, URELIA Director, and URELIA Admin can access unpublished researches
 export function canViewUnpublished(user?: User | null): boolean {
   if (!user) return false;
-  // Explicitly deny roles 1, 2, and 4
-  if (user.role === 'student' || user.role === 'program_chair' || user.role === 'urelia_personnel') {
+  if (
+    user.role === 'student' ||
+    user.role === 'program_chair' ||
+    user.role === 'urelia_personnel' ||
+    user.role === 'researcher'
+  ) {
     return false;
   }
   return isDean(user) || isUreliaDirector(user) || isUreliaAdmin(user);
 }
 
 // Full PDF viewer access:
-// All students, faculty, and administrators have full PDF viewer access to any PUBLISHED research paper.
-// Unpublished manuscripts (pending review or unpublished archive) are exclusively accessible by College Deans, URELIA Director, and URELIA Admin.
+// All users have full PDF viewer access to any PUBLISHED research paper.
+// Unpublished manuscripts are exclusively accessible by College Deans, URELIA Director, and URELIA Admin.
 export function canViewFullPaper(user?: User | null, paper?: any | null): boolean {
   if (paper) {
     const isPublished =
@@ -110,7 +205,6 @@ export function canViewFullPaper(user?: User | null, paper?: any | null): boolea
 }
 
 // Final Archive & Publish approval is exclusively reserved for URELIA (Director / Admin)
-// Program Chairs, Deans, and URELIA Research Personnel CANNOT approve or reject papers into the archive
 export function canDirectPublish(user?: User | null): boolean {
   if (!user) return false;
   if (user.role === 'urelia_personnel') return false;
@@ -130,21 +224,26 @@ export function canEndorseSubmissions(user?: User | null): boolean {
   return isDean(user);
 }
 
-// Research submission is authorized for Program Chairs and URELIA (Direct upload)
+// Research submission is authorized for Program Chairs, Deans, URELIA staff, and Researchers (published only)
 export function canSubmitResearch(user?: User | null): boolean {
   if (!user || isStudent(user)) return false;
-  return true;
+  return (
+    isProgramChair(user) ||
+    isDean(user) ||
+    isUrelia(user) ||
+    isResearcher(user)
+  );
 }
 
 // Review Queue access: Program Chairs, Deans, URELIA Personnel, Director, & Admin
 export function canReviewSubmissions(user?: User | null): boolean {
-  if (!user || isStudent(user)) return false;
-  return true;
+  if (!user || isStudent(user) || isResearcher(user)) return false;
+  return isProgramChair(user) || isDean(user) || isUrelia(user);
 }
 
 // Analytics & Reports: Deans, URELIA Personnel, URELIA Director, & URELIA Admin
 export function canViewAnalytics(user?: User | null): boolean {
-  if (!user || isStudent(user)) return false;
+  if (!user || isStudent(user) || isResearcher(user)) return false;
   return isDean(user) || isUrelia(user);
 }
 
@@ -177,12 +276,14 @@ export function getUserRoleDisplayLabel(userOrRole?: User | UserRole | string | 
     case 'urelia_personnel':
     case 'research_personnel':
     case 'personnel':
-      return 'URELIA / Research Personnel';
+      return 'URELIA Personnel';
     case 'urelia_director':
     case 'director':
       return 'URELIA Director';
     case 'urelia_admin':
       return 'URELIA Admin';
+    case 'researcher':
+      return 'Researcher';
     case 'super_admin':
       return 'URELIA Admin';
     case 'admin':
@@ -211,6 +312,9 @@ export function getRoleBadgeClass(role?: UserRole | string | null): string {
   if (norm === 'program_chair') {
     return 'bg-teal-400/20 text-teal-200 border border-teal-400/40';
   }
+  if (norm === 'researcher') {
+    return 'bg-sky-400/20 text-sky-200 border border-sky-400/40';
+  }
   if (norm === 'student') {
     return 'bg-slate-400/20 text-slate-200 border border-slate-400/30';
   }
@@ -226,3 +330,38 @@ export function formatUserDisplayName(name?: string, email?: string): string {
   }
   return 'UDM Researcher';
 }
+
+/**
+ * Sanitizes external or local resource URLs to prevent javascript:, data:, or vbscript: XSS payloads.
+ */
+export function sanitizeSafeUrl(
+  rawUrl?: string | null,
+  allowLocalUploadAndBlob: boolean = false
+): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+
+  // Reject protocol-relative redirects (//evil.com) and control chars
+  if (trimmed.startsWith('//') || /[\x00-\x1f\x7f]/.test(trimmed)) {
+    return '';
+  }
+
+  if (allowLocalUploadAndBlob) {
+    if (trimmed.startsWith('/uploads/') || trimmed.startsWith('blob:')) {
+      return trimmed;
+    }
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+

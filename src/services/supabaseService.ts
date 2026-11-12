@@ -1,11 +1,67 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Research, Submission, User, UserRole, SystemSettings, UDMCollege, AccessRequest, UDM_COLLEGES } from '../types';
+import { Research, Submission, User, UserRole, SystemSettings, UDMCollege, AccessRequest } from '../types';
 import {
   INITIAL_RESEARCH,
   INITIAL_USERS,
   INITIAL_SUBMISSIONS,
   INITIAL_SYSTEM_SETTINGS
 } from '../data/mockDatabase';
+import {
+  resolveCollegeForRole,
+  validateAdministratorOf,
+  isCollegeLockedRole,
+  URELIA_OFFICE_COLLEGE
+} from '../utils/userUtils';
+
+const AUTH_TOKEN_STORAGE_KEY = 'urhub_auth_token';
+
+export function getAuthToken(): string | null {
+  try {
+    return sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthToken(token: string | null): void {
+  try {
+    if (token) {
+      sessionStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    } else {
+      sessionStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    }
+  } catch {}
+}
+
+export function getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(extra || {})
+  };
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function mapSupabaseUserRow(u: any): User {
+  const role = (u.role || 'student') as UserRole;
+  const resolvedCollege = resolveCollegeForRole(role, u.college).college;
+  return {
+    userID: u.id || u.user_id,
+    name: u.name || u.full_name || u.email?.split('@')[0] || 'UDM User',
+    fullName: u.full_name || u.name,
+    email: u.email,
+    role,
+    userType: u.user_type,
+    college: resolvedCollege,
+    administratorOf: u.administrator_of || undefined,
+    idNumber: u.id_number || '',
+    courseProgram: u.course_program || '',
+    readingHistory: u.reading_history || []
+  };
+}
 
 // In-memory fallback stores when Supabase is not yet connected with credentials
 let inMemoryResearches: Research[] = [...INITIAL_RESEARCH];
@@ -246,18 +302,7 @@ export function subscribeToUsers(callback: (users: User[]) => void) {
   const fetchUsers = async () => {
     const { data, error } = await supabase.from('users').select('*');
     if (!error && data && data.length > 0) {
-      const mapped: User[] = data.map(u => ({
-        userID: u.id || u.user_id,
-        name: u.name || u.full_name,
-        fullName: u.full_name || u.name,
-        email: u.email,
-        role: u.role,
-        userType: u.user_type,
-        college: u.college as UDMCollege,
-        idNumber: u.id_number,
-        courseProgram: u.course_program,
-        readingHistory: u.reading_history || []
-      }));
+      const mapped: User[] = data.map(mapSupabaseUserRow);
       inMemoryUsers = mapped;
       callback(mapped);
     }
@@ -600,36 +645,162 @@ export async function recordUserReadingHistory(userID: string, researchID: strin
  * Users & System Settings
  */
 export async function saveUser(user: User): Promise<void> {
-  const existingIdx = inMemoryUsers.findIndex(u => u.userID === user.userID);
+  const collegeCheck = resolveCollegeForRole(user.role, user.college);
+  const normalizedUser: User = {
+    ...user,
+    college: collegeCheck.college,
+    administratorOf: user.role === 'researcher' ? (user.administratorOf || '').trim() : undefined
+  };
+
+  const existingIdx = inMemoryUsers.findIndex(u => u.userID === normalizedUser.userID);
   if (existingIdx >= 0) {
-    inMemoryUsers[existingIdx] = user;
+    inMemoryUsers[existingIdx] = normalizedUser;
   } else {
-    inMemoryUsers.push(user);
+    inMemoryUsers.push(normalizedUser);
   }
   notifyUsers();
 
   if (isSupabaseConfigured) {
     await supabase.from('users').upsert({
-      id: user.userID,
-      name: user.name,
-      full_name: user.fullName || user.name,
-      email: user.email,
-      role: user.role,
-      user_type: user.userType || 'Student',
-      college: user.college,
-      id_number: user.idNumber || '',
-      course_program: user.courseProgram || user.course || ''
+      id: normalizedUser.userID,
+      name: normalizedUser.name,
+      full_name: normalizedUser.fullName || normalizedUser.name,
+      email: normalizedUser.email,
+      role: normalizedUser.role,
+      user_type: normalizedUser.userType || 'Student',
+      college: normalizedUser.college,
+      administrator_of: normalizedUser.administratorOf || null,
+      id_number: normalizedUser.idNumber || '',
+      course_program: normalizedUser.courseProgram || normalizedUser.course || ''
     });
   }
 }
 
-export async function updateUserRole(userID: string, newRole: User['role']): Promise<void> {
-  inMemoryUsers = inMemoryUsers.map(u => u.userID === userID ? { ...u, role: newRole } : u);
+export interface AdminUserMutationPayload {
+  fullName: string;
+  email: string;
+  password?: string;
+  role: UserRole;
+  college: UDMCollege;
+  administratorOf?: string;
+  idNumber?: string;
+  courseProgram?: string;
+}
+
+export async function adminCreateUser(payload: AdminUserMutationPayload): Promise<User> {
+  const collegeCheck = resolveCollegeForRole(payload.role, payload.college);
+  if (!collegeCheck.valid) {
+    throw new Error(collegeCheck.error || 'Invalid College / Unit assignment.');
+  }
+  const adminOfCheck = validateAdministratorOf(payload.role, payload.administratorOf);
+  if (!adminOfCheck.valid) {
+    throw new Error(adminOfCheck.error || 'Invalid Researcher organization unit.');
+  }
+
+  const res = await fetch('/api/admin/users', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({
+      fullName: payload.fullName.trim(),
+      email: payload.email.trim().toLowerCase(),
+      password: payload.password,
+      role: payload.role,
+      college: collegeCheck.college,
+      administratorOf: adminOfCheck.value,
+      idNumber: (payload.idNumber || '').trim(),
+      courseProgram: (payload.courseProgram || '').trim()
+    })
+  });
+
+  const data = await parseResponseJson(res);
+  if (!res.ok || !data.user) {
+    throw new Error(data.error || 'Failed to create user.');
+  }
+
+  const createdUser: User = data.user;
+  await saveUser(createdUser);
+  return createdUser;
+}
+
+export async function adminUpdateUser(
+  userID: string,
+  updates: Partial<AdminUserMutationPayload> & { role: UserRole; college?: UDMCollege }
+): Promise<User> {
+  const effectiveCollegeInput = isCollegeLockedRole(updates.role)
+    ? URELIA_OFFICE_COLLEGE
+    : updates.college;
+  const collegeCheck = resolveCollegeForRole(updates.role, effectiveCollegeInput);
+  if (!collegeCheck.valid) {
+    throw new Error(collegeCheck.error || 'Invalid College / Unit assignment.');
+  }
+  const adminOfCheck = validateAdministratorOf(updates.role, updates.administratorOf);
+  if (!adminOfCheck.valid) {
+    throw new Error(adminOfCheck.error || 'Invalid Researcher organization unit.');
+  }
+
+  const res = await fetch(`/api/admin/users/${encodeURIComponent(userID)}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({
+      fullName: updates.fullName?.trim(),
+      role: updates.role,
+      college: collegeCheck.college,
+      administratorOf: adminOfCheck.value,
+      idNumber: updates.idNumber?.trim(),
+      courseProgram: updates.courseProgram?.trim()
+    })
+  });
+
+  const data = await parseResponseJson(res);
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to update user.');
+  }
+
+  const existing = inMemoryUsers.find(u => u.userID === userID);
+  const updatedUser: User = data.user || {
+    ...(existing || { userID, name: updates.fullName || 'UDM User', email: updates.email || '' }),
+    userID,
+    name: updates.fullName?.trim() || existing?.name || 'UDM User',
+    fullName: updates.fullName?.trim() || existing?.fullName || existing?.name,
+    role: updates.role,
+    college: collegeCheck.college,
+    administratorOf: adminOfCheck.value,
+    courseProgram: updates.courseProgram?.trim() ?? existing?.courseProgram
+  };
+
+  inMemoryUsers = inMemoryUsers.map(u => (u.userID === userID ? updatedUser : u));
   notifyUsers();
 
   if (isSupabaseConfigured) {
-    await supabase.from('users').update({ role: newRole }).eq('id', userID);
+    await supabase
+      .from('users')
+      .update({
+        name: updatedUser.name,
+        full_name: updatedUser.fullName || updatedUser.name,
+        role: updatedUser.role,
+        college: updatedUser.college,
+        administrator_of: updatedUser.administratorOf || null,
+        course_program: updatedUser.courseProgram || ''
+      })
+      .eq('id', userID);
   }
+
+  return updatedUser;
+}
+
+export async function updateUserRole(userID: string, newRole: User['role'], administratorOf?: string): Promise<void> {
+  const existing = inMemoryUsers.find(u => u.userID === userID);
+  const targetCollege = isCollegeLockedRole(newRole)
+    ? URELIA_OFFICE_COLLEGE
+    : existing?.college || 'CCS';
+
+  await adminUpdateUser(userID, {
+    role: newRole,
+    college: targetCollege,
+    administratorOf: newRole === 'researcher' ? (administratorOf ?? existing?.administratorOf) : undefined
+  });
 }
 
 export function subscribeToSystemSettings(callback: (settings: SystemSettings) => void) {
@@ -721,6 +892,7 @@ export interface RegisterPayload {
   confirmPassword?: string;
   role: 'Student' | 'Faculty' | 'Faculty_Admin' | 'Faculty/Admin' | UserRole;
   college: UDMCollege;
+  administratorOf?: string;
   idNumber: string;
   courseProgram: string;
   yearLevel?: string;
@@ -755,6 +927,15 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
   }
 
   const assignedRole: User['role'] = (data.role as UserRole) || 'student';
+  const collegeCheck = resolveCollegeForRole(assignedRole, data.college);
+  if (!collegeCheck.valid) {
+    throw new Error(collegeCheck.error || 'Invalid College / Unit selected.');
+  }
+
+  const adminOfCheck = validateAdministratorOf(assignedRole, data.administratorOf);
+  if (!adminOfCheck.valid) {
+    throw new Error(adminOfCheck.error || 'Please provide valid Researcher affiliation details.');
+  }
 
   // Check if account already exists in Supabase public.users
   if (isSupabaseConfigured) {
@@ -786,12 +967,14 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
   const res = await fetch('/api/auth/send-verification-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({
       fullName: data.fullName.trim(),
       email: normalizedEmail,
       password: data.password,
       role: assignedRole,
-      college: data.college,
+      college: collegeCheck.college,
+      administratorOf: adminOfCheck.value,
       idNumber: data.idNumber.trim(),
       courseProgram: data.courseProgram.trim(),
       yearLevel: data.yearLevel || '1st Year'
@@ -810,8 +993,9 @@ export async function registerUserWithSupabase(data: RegisterPayload): Promise<R
     fullName: data.fullName.trim(),
     email: normalizedEmail,
     role: assignedRole,
-    userType: (data.role === 'Faculty/Admin' || data.role === 'Faculty') ? 'Faculty_Admin' : (data.role === 'student' ? 'Student' : (data.role as any)),
-    college: data.college,
+    userType: (data.role === 'Faculty/Admin' || data.role === 'Faculty') ? 'Faculty_Admin' : (data.role === 'student' ? 'Student' : (assignedRole === 'researcher' ? 'Researcher' : 'Faculty_Admin')),
+    college: collegeCheck.college,
+    administratorOf: adminOfCheck.value,
     idNumber: data.idNumber.trim(),
     courseProgram: data.courseProgram.trim(),
     yearLevel: data.yearLevel || '1st Year',
@@ -845,12 +1029,17 @@ export async function verifySignupOTP(email: string, tokenOrHash: string): Promi
   const res = await fetch('/api/auth/verify-registration-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email: cleanEmail, otpCode: cleanToken })
   });
 
   const result = await parseResponseJson(res);
   if (!res.ok || !result.success || !result.user) {
     throw new Error(result.error || 'Incorrect or expired 6-digit verification code. Please check your email and try again.');
+  }
+
+  if (result.token) {
+    setAuthToken(result.token);
   }
 
   const activatedUser: User = result.user;
@@ -931,22 +1120,24 @@ export async function updateUserPassword(newPassword: string): Promise<void> {
 }
 
 export async function getAllDatabaseUsers(): Promise<User[]> {
+  try {
+    const res = await fetch('/api/admin/users', {
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return data;
+      }
+    }
+  } catch {}
+
   if (isSupabaseConfigured) {
     try {
       const { data, error } = await supabase.from('users').select('*');
       if (!error && data && data.length > 0) {
-        return data.map(u => ({
-          userID: u.id || u.user_id,
-          name: u.name || u.full_name || u.email?.split('@')[0],
-          fullName: u.full_name || u.name,
-          email: u.email,
-          role: u.role,
-          userType: u.user_type,
-          college: u.college as UDMCollege,
-          idNumber: u.id_number,
-          courseProgram: u.course_program,
-          readingHistory: u.reading_history || []
-        }));
+        return data.map(mapSupabaseUserRow);
       }
     } catch (err) {
       console.warn('Could not query Supabase users:', err);
@@ -960,60 +1151,102 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
   const clean = raw.toLowerCase();
   const candidateEmail = clean.includes('@') ? clean : `${clean}@udm.edu.ph`;
 
-  // Candidate email resolution (supports username, ID number, or full email)
+  // Require explicit password (removes passwordless authentication bypass)
+  if (!password) {
+    throw new Error('Password is required to sign in.');
+  }
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (candidateEmail.includes('@') && !emailRegex.test(candidateEmail)) {
     throw new Error('Please enter a valid email address.');
   }
 
-  // 1. Try Supabase Auth first if password is provided
-  if (isSupabaseConfigured && password && clean.includes('@')) {
+  // 1. Authenticate against backend session endpoint (verifies scrypt hash or Supabase Auth + issues signed session)
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email: candidateEmail, password })
+    });
+
+    const body = await parseResponseJson(res);
+    if (res.ok && body?.user) {
+      if (body.token) {
+        setAuthToken(body.token);
+      }
+      const user: User = {
+        ...body.user,
+        college: resolveCollegeForRole(body.user.role, body.user.college).college
+      };
+      try {
+        localStorage.setItem('udm_active_user', JSON.stringify(user));
+      } catch {}
+      return user;
+    }
+
+    // If backend explicitly rejected credentials, fail immediately without fallback bypass
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      throw new Error(body?.error || 'Invalid email or password. Please verify your credentials and try again.');
+    }
+  } catch (apiErr: any) {
+    // Re-throw explicit authentication errors; only fall through if backend endpoint was unreachable
+    if (
+      apiErr?.message &&
+      !apiErr.message.includes('Failed to fetch') &&
+      !apiErr.message.includes('NetworkError') &&
+      !apiErr.message.includes('Server error (5')
+    ) {
+      throw apiErr;
+    }
+  }
+
+  // 2. Fallback to direct Supabase Auth if backend is unavailable
+  if (isSupabaseConfigured && clean.includes('@')) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: candidateEmail,
       password
     });
 
     if (error) {
-      const errMsg = error.message.toLowerCase();
-      // If email is not confirmed in Supabase, allow access only if credentials were valid
-      if (errMsg.includes('email not confirmed')) {
-        console.info('Bypassing email confirmation for @udm.edu.ph user:', candidateEmail);
-      } else if (errMsg.includes('invalid login credentials') || errMsg.includes('invalid credentials')) {
-        // Check if this is an in-memory or seed demo user with a known mock password
-        const demoUser = inMemoryUsers.find(u => u.email.toLowerCase() === candidateEmail) ||
-                         INITIAL_USERS.find(u => u.email.toLowerCase() === candidateEmail);
-        if (demoUser && demoUser.password) {
-          if (demoUser.password !== password) {
-            throw new Error('Invalid email or password. Please verify your credentials and try again.');
-          }
-          try {
-            localStorage.setItem('udm_active_user', JSON.stringify(demoUser));
-          } catch {}
-          return demoUser;
-        }
-        // Wrong password for Supabase user: strictly reject!
-        throw new Error('Invalid email or password. Please verify your credentials and try again.');
-      } else {
-        throw new Error(error.message || 'Authentication failed. Please check your credentials.');
-      }
+      throw new Error('Invalid email or password. Please verify your credentials and try again.');
     }
 
     if (data?.user) {
-      // Find user in Supabase table
-      const { data: profile } = await supabase
+      if (data.session?.access_token) {
+        setAuthToken(data.session.access_token);
+      }
+      // Parameterized separate queries instead of unsafe .or() string interpolation
+      let { data: profile } = await supabase
         .from('users')
         .select('*')
-        .or(`id.eq.${data.user.id},email.ilike.${candidateEmail}`)
+        .eq('id', data.user.id)
         .maybeSingle();
+
+      if (!profile) {
+        const { data: emailProfile } = await supabase
+          .from('users')
+          .select('*')
+          .ilike('email', candidateEmail)
+          .maybeSingle();
+        profile = emailProfile;
+      }
+
+      const role = (profile?.role || data.user.user_metadata?.role || 'student') as UserRole;
+      const resolvedCollege = resolveCollegeForRole(
+        role,
+        profile?.college || data.user.user_metadata?.college
+      ).college;
 
       const user: User = {
         userID: profile?.id || data.user.id,
         name: profile?.name || profile?.full_name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
         fullName: profile?.full_name || profile?.name || data.user.user_metadata?.full_name || candidateEmail.split('@')[0],
         email: profile?.email || data.user.email || candidateEmail,
-        role: profile?.role || 'student_faculty',
+        role,
         userType: profile?.user_type || data.user.user_metadata?.user_type || 'Student',
-        college: profile?.college || data.user.user_metadata?.college || 'CCS',
+        college: resolvedCollege,
+        administratorOf: profile?.administrator_of || data.user.user_metadata?.administrator_of || undefined,
         idNumber: profile?.id_number || data.user.user_metadata?.id_number || '',
         courseProgram: profile?.course_program || data.user.user_metadata?.course_program || '',
         readingHistory: profile?.reading_history || []
@@ -1025,69 +1258,17 @@ export async function loginUserWithSupabase(identifier: string, password?: strin
     }
   }
 
-  // 2. Check in-memory demo / seed users with strict password check
-  const found = inMemoryUsers.find(u => 
-    u.email.toLowerCase() === candidateEmail ||
-    u.email.toLowerCase() === clean ||
-    (u.idNumber && u.idNumber.toLowerCase() === raw.toLowerCase()) ||
-    u.userID === raw
-  ) || INITIAL_USERS.find(u => 
-    u.email.toLowerCase() === candidateEmail ||
-    u.email.toLowerCase() === clean ||
-    u.userID === raw
-  );
-
-  if (found) {
-    if (password && found.password && found.password !== password) {
-      throw new Error('Invalid email or password. Please verify your credentials and try again.');
-    }
-    try {
-      localStorage.setItem('udm_active_user', JSON.stringify(found));
-    } catch {}
-    return found;
-  }
-
-  // If password was supplied but auth failed, strictly reject!
-  if (password) {
-    throw new Error('Invalid email or password. Please verify your credentials and try again.');
-  }
-
-  // 3. Passwordless session lookup by ID (only when password is not supplied)
-  if (isSupabaseConfigured && !password) {
-    try {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('*')
-        .or(`email.ilike.${candidateEmail},id_number.eq.${raw},id.eq.${raw}`)
-        .maybeSingle();
-
-      if (profile) {
-        const user: User = {
-          userID: profile.id,
-          name: profile.name || profile.full_name || profile.email?.split('@')[0] || raw,
-          fullName: profile.full_name || profile.name,
-          email: profile.email || candidateEmail,
-          role: profile.role || 'student_faculty',
-          userType: profile.user_type || 'Student',
-          college: profile.college || 'CCS',
-          idNumber: profile.id_number || '',
-          courseProgram: profile.course_program || '',
-          readingHistory: profile.reading_history || []
-        };
-        try {
-          localStorage.setItem('udm_active_user', JSON.stringify(user));
-        } catch {}
-        return user;
-      }
-    } catch (dbErr) {
-      console.warn('Supabase users query error:', dbErr);
-    }
-  }
-
-  throw new Error(`Account "${raw}" not found. Please register and confirm your account using your @udm.edu.ph or @gmail.com email.`);
+  throw new Error('Invalid email or password, or authentication service is unavailable.');
 }
 
 export async function logoutUserWithSupabase(): Promise<void> {
+  setAuthToken(null);
+  try {
+    localStorage.removeItem('udm_active_user');
+  } catch {}
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch {}
   if (isSupabaseConfigured) {
     await supabase.auth.signOut();
   }

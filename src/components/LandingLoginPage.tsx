@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UDMCollege, UDM_COLLEGES, Research } from '../types';
-import { INITIAL_USERS } from '../data/mockDatabase';
-import udmBuildingBg from '../assets/images/udm_hero_building_1785654888561.jpg';
 import {
   loginUserWithSupabase,
   registerUserWithSupabase,
@@ -13,7 +11,11 @@ import {
 } from '../services/supabaseService';
 import {
   getUserRoleDisplayLabel,
-  getRoleBadgeClass
+  getRoleBadgeClass,
+  isCollegeLockedRole,
+  validateAdministratorOf,
+  URELIA_OFFICE_COLLEGE,
+  ADMINISTRATOR_OF_MAX_LENGTH
 } from '../utils/userUtils';
 import {
   ShieldCheck,
@@ -40,7 +42,6 @@ import {
   Search,
   ExternalLink,
   ChevronRight,
-  Zap,
   Award,
   Info,
   Code2,
@@ -78,9 +79,17 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [userRole, setUserRole] = useState<UserRole>('student');
   const [college, setCollege] = useState<UDMCollege>('CCS');
+  const [administratorOf, setAdministratorOf] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [courseProgram, setCourseProgram] = useState('');
   const [yearLevel, setYearLevel] = useState<string>('1st Year');
+
+  // Lock & preset College when URELIA Personnel or URELIA Director role is selected
+  useEffect(() => {
+    if (isCollegeLockedRole(userRole)) {
+      setCollege(URELIA_OFFICE_COLLEGE);
+    }
+  }, [userRole]);
 
   // Password Visibility
   const [showPassword, setShowPassword] = useState(false);
@@ -169,13 +178,21 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
         throw new Error('Student/Faculty ID Number is required.');
       }
 
+      const adminOfCheck = validateAdministratorOf(userRole, administratorOf);
+      if (!adminOfCheck.valid) {
+        throw new Error(adminOfCheck.error);
+      }
+
+      const effectiveCollege = isCollegeLockedRole(userRole) ? URELIA_OFFICE_COLLEGE : college;
+
       const result = await registerUserWithSupabase({
         fullName: fullName.trim(),
         email: cleanEmail,
         password: regPassword,
         confirmPassword: regConfirmPassword,
         role: userRole,
-        college,
+        college: effectiveCollege,
+        administratorOf: userRole === 'researcher' ? adminOfCheck.value : undefined,
         idNumber: idNumber.trim(),
         courseProgram: courseProgram.trim(),
         yearLevel: userRole === 'student' ? yearLevel : undefined
@@ -294,23 +311,8 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-[#c9a84c] selection:text-[#1a4731] relative overflow-x-hidden">
-      
-      {/* Background Ambience: Subtle UDM Campus Watermark + Soft Emerald/Gold Light Mesh */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <img
-          src={udmBuildingBg}
-          alt="Universidad de Manila Campus Background"
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-center opacity-10 filter blur-[1px] scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-emerald-50/40 to-amber-50/25" />
-        
-        {/* Soft decorative glow circles */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#1a4731]/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-1/3 -right-32 w-[32rem] h-[32rem] bg-[#c9a84c]/15 rounded-full blur-3xl pointer-events-none" />
-      </div>
 
-      {/* Main Split-Screen Container (Facebook-style 2-column layout with rich insights) */}
+      {/* Main Split-Screen Container */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 flex flex-col justify-center">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
 
@@ -321,7 +323,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
             
             {/* Branding Header */}
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-3 bg-white/90 border border-slate-200/90 shadow-xs px-3.5 py-1.5 rounded-full backdrop-blur-md">
+              <div className="inline-flex items-center gap-3 bg-white border border-slate-200 shadow-xs px-3.5 py-1.5 rounded-full">
                 <div className="w-7 h-7 rounded-full overflow-hidden bg-white border border-[#c9a84c] flex items-center justify-center shrink-0">
                   <img
                     src="/udm-logo.png"
@@ -351,13 +353,15 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                 </button>
               </div>
 
-              {/* Big, Crisp Facebook-style Hero Headline */}
-              <h1 className="text-3xl sm:text-4xl xl:text-5xl font-black text-[#1a4731] tracking-tight leading-[1.15]">
-                Advancing Knowledge, <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1a4731] via-[#236345] to-[#c9a84c]">
-                  Preserving Merlion Scholarship.
-                </span>
-              </h1>
+              {/* Clear Visual Hierarchy: Title (Largest) > Tagline > Subtitle */}
+              <div className="space-y-3">
+                <h1 className="text-4xl sm:text-5xl xl:text-6xl font-black text-[#1a4731] tracking-tight leading-[1.08]">
+                  UDM ResearchHub
+                </h1>
+                <p className="text-lg sm:text-xl xl:text-2xl font-bold text-[#236345] tracking-tight leading-snug">
+                  Advancing Knowledge, Preserving Merlion Scholarship.
+                </p>
+              </div>
 
               <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-normal">
                 Universidad de Manila’s centralized digital research archive connecting students, faculty mentors, and academic leadership across all 7 Colleges and Administrative Units.
@@ -384,7 +388,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                     <BookOpen className="w-4 h-4 text-[#1a4731] group-hover:scale-110 transition-transform" />
                   </div>
                   <div className="text-2xl font-black text-[#1a4731] tracking-tight">
-                    {totalPapers}+
+                    {totalPapers}
                   </div>
                   <div className="text-[11px] text-slate-500 font-medium">
                     Theses & Capstones
@@ -398,7 +402,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                     <Building2 className="w-4 h-4 text-[#c9a84c] group-hover:scale-110 transition-transform" />
                   </div>
                   <div className="text-2xl font-black text-[#1a4731] tracking-tight">
-                    7 + Admin
+                    7 admins
                   </div>
                   <div className="text-[11px] text-slate-500 font-medium">
                     All UDM Units
@@ -425,20 +429,18 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Discovery</span>
                     <Sparkles className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
                   </div>
-                  <div className="text-2xl font-black text-[#1a4731] tracking-tight">
-                    TF-IDF
+                  <div className="text-xl sm:text-2xl font-black text-[#1a4731] tracking-tight leading-tight">
+                    Smart Discovery
                   </div>
                   <div className="text-[11px] text-slate-500 font-medium">
-                    Cosine AI Vector ML
+                    Academic Indexing
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Trending Research Themes / Spotlight */}
-            <div className="bg-gradient-to-r from-emerald-900/90 via-[#1a4731] to-emerald-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-[#c9a84c]/30 relative overflow-hidden">
-              <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-40 h-40 bg-[#c9a84c]/20 rounded-full blur-2xl pointer-events-none" />
-              
+            <div className="bg-[#1a4731] text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-[#c9a84c]/40 relative overflow-hidden">
               <div className="relative z-10 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -483,10 +485,10 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
           {/* RIGHT COLUMN: THE ELEVATED FACEBOOK-STYLE LOGIN CARD       */}
           {/* ========================================================= */}
           <div className="lg:col-span-5 w-full">
-            <div className="bg-white rounded-3xl shadow-xl shadow-slate-900/10 border border-slate-200/90 p-6 sm:p-8 relative overflow-hidden backdrop-blur-md">
+            <div className="bg-white rounded-3xl shadow-xl shadow-slate-900/10 border border-slate-200 p-6 sm:p-8 relative overflow-hidden">
               
-              {/* Subtle top brand bar on card */}
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#1a4731] via-[#c9a84c] to-[#1a4731]" />
+              {/* Solid top brand accent bar */}
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-[#1a4731]" />
 
               {/* Mode Switcher Tabs (Sign In vs Register) */}
               {(authMode === 'signin' || authMode === 'register') && (
@@ -640,79 +642,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                     )}
                   </button>
 
-                  {/* Quick One-Click Instant Role Selector */}
-                  <div className="pt-2 border-t border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                      <span className="flex items-center gap-1 text-[#1a4731]">
-                        <Zap className="w-3.5 h-3.5 text-[#c9a84c]" />
-                        <span>Instant Login by Role (1-Click)</span>
-                      </span>
-                      <span className="text-[#c9a84c] bg-[#1a4731] px-1.5 py-0.2 rounded font-mono text-[9px]">Official Matrix</span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-left">
-                      <button
-                        type="button"
-                        onClick={() => onLoginSuccess(INITIAL_USERS[0])}
-                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                        title="Instant sign in as Student Juan Dela Cruz"
-                      >
-                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">1. Student</div>
-                        <div className="text-[9px] text-slate-500 truncate">Juan Dela Cruz</div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onLoginSuccess(INITIAL_USERS[1])}
-                        className="p-1.5 sm:p-2 rounded-lg border border-teal-300 hover:border-teal-500 bg-teal-50/70 hover:bg-teal-100/70 transition-all text-left cursor-pointer group shadow-2xs ring-1 ring-teal-400/40"
-                        title="Instant sign in as Program Chair Prof. Maria Santos"
-                      >
-                        <div className="text-[10px] sm:text-[11px] font-bold text-teal-900 group-hover:text-[#1a4731]">2. Program Chair</div>
-                        <div className="text-[9px] text-teal-700 font-medium truncate">Prof. Maria Santos</div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onLoginSuccess(INITIAL_USERS[2])}
-                        className="p-1.5 sm:p-2 rounded-lg border border-amber-300 hover:border-amber-500 bg-amber-50/70 hover:bg-amber-100/70 transition-all text-left cursor-pointer group shadow-2xs"
-                        title="Instant sign in as College Dean Dr. Carmelo Perez"
-                      >
-                        <div className="text-[10px] sm:text-[11px] font-bold text-amber-900 group-hover:text-[#1a4731]">3. College Dean</div>
-                        <div className="text-[9px] text-amber-700 font-medium truncate">Dr. Carmelo Perez</div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onLoginSuccess(INITIAL_USERS[3])}
-                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                        title="Instant sign in as URELIA Staff Engr. Mark Tan"
-                      >
-                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">4. URELIA Staff</div>
-                        <div className="text-[9px] text-slate-500 truncate">Engr. Mark Tan</div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onLoginSuccess(INITIAL_USERS[4])}
-                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                        title="Instant sign in as URELIA Director Dr. Roberto Del Rosario"
-                      >
-                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">5. Director</div>
-                        <div className="text-[9px] text-slate-500 truncate">Dr. Del Rosario</div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onLoginSuccess(INITIAL_USERS[5])}
-                        className="p-1.5 sm:p-2 rounded-lg border border-slate-200 hover:border-[#1a4731] bg-slate-50 hover:bg-slate-100 transition-all text-left cursor-pointer group shadow-2xs"
-                        title="Instant sign in as URELIA Administrator"
-                      >
-                        <div className="text-[10px] sm:text-[11px] font-bold text-slate-800 group-hover:text-[#1a4731]">6. Admin</div>
-                        <div className="text-[9px] text-slate-500 truncate">URELIA Admin</div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Facebook-style Divider */}
+                  {/* Institutional Auth Divider */}
                   <div className="relative py-2">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-slate-200" />
@@ -807,6 +737,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                         <option value="urelia_personnel">URELIA Research Staff</option>
                         <option value="urelia_director">URELIA Director</option>
                         <option value="urelia_admin">URELIA Admin</option>
+                        <option value="researcher">Researcher</option>
                       </select>
                     </div>
 
@@ -814,11 +745,21 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                       <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
                         <Building2 className="w-3.5 h-3.5 text-[#1a4731]" />
                         <span>College / Unit *</span>
+                        {isCollegeLockedRole(userRole) && (
+                          <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.2 rounded font-bold normal-case">
+                            <Lock className="w-2.5 h-2.5" /> Locked
+                          </span>
+                        )}
                       </label>
                       <select
-                        value={college}
-                        onChange={e => setCollege(e.target.value as UDMCollege)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none font-medium cursor-pointer"
+                        value={isCollegeLockedRole(userRole) ? URELIA_OFFICE_COLLEGE : college}
+                        onChange={e => {
+                          if (!isCollegeLockedRole(userRole)) {
+                            setCollege(e.target.value as UDMCollege);
+                          }
+                        }}
+                        disabled={isCollegeLockedRole(userRole)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none font-medium cursor-pointer disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
                       >
                         {UDM_COLLEGES.map(col => (
                           <option key={col.id} value={col.id}>
@@ -826,8 +767,40 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                           </option>
                         ))}
                       </select>
+                      {isCollegeLockedRole(userRole) && (
+                        <p className="text-[10px] text-amber-700 font-medium mt-1">
+                          Locked to URELIA Office (FAC-ADM) for URELIA Personnel & Director roles.
+                        </p>
+                      )}
                     </div>
                   </div>
+
+                  {/* Conditional Researcher Field: Administrator of / Where they come from */}
+                  {userRole === 'researcher' && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+                          <Building2 className="w-3.5 h-3.5 text-[#1a4731]" />
+                          <span>Administrator of / Where they come from *</span>
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {administratorOf.trim().length}/{ADMINISTRATOR_OF_MAX_LENGTH}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        maxLength={ADMINISTRATOR_OF_MAX_LENGTH}
+                        value={administratorOf}
+                        onChange={e => setAdministratorOf(e.target.value)}
+                        placeholder="e.g., Office of the Vice President for Research / CCS Extension Unit"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:border-[#1a4731] focus:outline-none"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Required (max {ADMINISTRATOR_OF_MAX_LENGTH} characters). Note: Researchers may only submit published research papers.
+                      </p>
+                    </div>
+                  )}
 
                   {/* ID Number & Course/Program */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1175,14 +1148,13 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
           >
             {/* Modal Header */}
             <div className="bg-[#1a4731] text-white px-6 py-5 flex items-center justify-between shrink-0 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#c9a84c]/10 rounded-full blur-2xl pointer-events-none" />
               <div className="flex items-center space-x-3 relative z-10">
                 <div className="w-10 h-10 rounded-xl bg-white/10 border border-[#c9a84c]/40 text-[#c9a84c] flex items-center justify-center shadow-inner">
                   <GraduationCap className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white tracking-wide">
-                    About Us • The Capstone Project
+                    About Us • Meet the Developers and Programmers
                   </h3>
                   <p className="text-xs text-emerald-100/80 font-medium">
                     Universidad de Manila • URELIA Research Gateway
@@ -1270,7 +1242,7 @@ export const LandingLoginPage: React.FC<LandingLoginPageProps> = ({
                     <span>Created with Visual Studio Code</span>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-normal">
-                    Designed, architected, and coded in <strong>Visual Studio Code</strong> using full-stack TypeScript, React, Vite, Express, and Machine Learning TF-IDF natural language indexing algorithms.
+                    Designed, architected, and coded in <strong>Visual Studio Code</strong> using full-stack TypeScript, React, Vite, Express, and intelligent natural language indexing algorithms.
                   </p>
                 </div>
 

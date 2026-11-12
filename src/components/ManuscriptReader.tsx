@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Research, UDM_COLLEGES } from '../types';
 import { getOriginalPdfUrl, saveOriginalPdf } from '../utils/pdfStorage';
+import { sanitizeSafeUrl } from '../utils/userUtils';
+import { getAuthHeaders } from '../services/supabaseService';
 import {
   Download,
   ExternalLink,
@@ -54,8 +56,15 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
   // Check if a relative /uploads/ server URL actually exists and is a PDF
   useEffect(() => {
     let active = true;
-    if (research.fullPdfUrl && research.fullPdfUrl.startsWith('/uploads/')) {
-      fetch(research.fullPdfUrl, { method: 'HEAD' })
+    const safeRelativeUpload =
+      research.fullPdfUrl &&
+      research.fullPdfUrl.startsWith('/uploads/') &&
+      !research.fullPdfUrl.includes('..')
+        ? sanitizeSafeUrl(research.fullPdfUrl, true)
+        : '';
+
+    if (safeRelativeUpload) {
+      fetch(safeRelativeUpload, { method: 'HEAD', credentials: 'include' })
         .then(res => {
           if (active) {
             const isPdf = res.ok && (res.headers.get('content-type')?.includes('pdf') || false);
@@ -75,7 +84,7 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
   const originalPdfUrl = useMemo(() => {
     // 1. Exact original PDF file uploaded by the user
     if (originalBlobUrl) {
-      return originalBlobUrl;
+      return sanitizeSafeUrl(originalBlobUrl, true);
     }
 
     if (!research.fullPdfUrl) return '';
@@ -87,17 +96,17 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
       if (match && match[1]) {
         return `https://drive.google.com/file/d/${match[1]}/preview`;
       }
-      return rawUrl.replace(/\/view(\?.*)?$/, '/preview');
+      return sanitizeSafeUrl(rawUrl.replace(/\/view(\?.*)?$/, '/preview'), false);
     }
 
-    // 3. Absolute http / https / blob URL
+    // 3. Absolute http / https / blob URL (validated against dangerous schemes)
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:')) {
-      return rawUrl;
+      return sanitizeSafeUrl(rawUrl, true);
     }
 
     // 4. Server-hosted /uploads/ file ONLY if verified to exist as PDF
     if (rawUrl.startsWith('/uploads/') && serverPdfAvailable) {
-      return rawUrl;
+      return sanitizeSafeUrl(rawUrl, true);
     }
 
     return '';
@@ -125,7 +134,8 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
           const base64 = (reader.result as string).split(',')[1];
           await fetch('/api/upload-pdf', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
+            credentials: 'include',
             body: JSON.stringify({
               fileName: file.name,
               researchId: research.researchID,
@@ -177,7 +187,7 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({
             <a
               href={originalPdfUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs flex items-center space-x-1 transition-all cursor-pointer"
               title="Open full PDF document in a new tab"
             >
